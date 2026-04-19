@@ -1,53 +1,85 @@
-# Supervisor Meeting Notes (Essential)
+# Research Notes: Reduced Scope for Supervisor Discussion
 
-## Context (from OpenReview and paper discussion)
+## What the Reviews Actually Tell Us
 
-- The paper was accepted, but reviewers repeatedly noted that the contribution is broad (CO + EKVAE + VHP), making attribution difficult.
-- The strongest accepted claim is empirical: better system identification and prediction when these components are combined.
-- Two recurring concerns were reproducibility (no official code) and clarity of what each component contributes.
+- The strongest part of the paper is the empirical result on dynamics and system identification.
+- Reviewers were not fully convinced about attribution, because several ideas are combined (CO, EKVAE, VHP).
+- Reproducibility is a real concern in our case, especially without an official repository.
 
-## Questions to Ask
+Given that, the key question for this project should stay narrow:
 
-1. Which model comparisons are mandatory for our scope (minimum baseline set)?
-2. Which paper sections are optional and can be excluded if time is limited (for example RL/disentanglement)?
-3. What reproduction standard should we target given no official source code: trend match, approximate numbers, or full table replication?
-4. Should $D_0$ sensitivity testing be required in our first full evaluation?
-5. Should we avoid strong Jacobian-style claims unless we add explicit verification experiments?
-6. Is it acceptable to prioritize a staged reproduction (CO first, then EKVAE, then VHP) rather than reproducing everything at once?
-7. Which additional dataset family should we prioritize after paper datasets: finance-style, health/wearables, or another domain?
+- Can we show, in a controlled way, that CO and latent-structure choices improve dynamics learning over standard ELBO training?
 
-## What to Evaluate First
+## Recommended Reduced Scope
 
-1. ELBO vs actual predictive quality (do high ELBO models fail on dynamics?).
-2. CO vs annealing on the same model backbone (same data, same seed policy).
-3. EKVAE vs selected baselines on paper datasets (pendulum, reacher-angle, reacher-RGB).
-4. With/without VHP prior effect on prediction quality and generative stability.
+### Keep in Scope
 
-Minimum evidence target:
+1. Use only the paper datasets for the main study.
+   Why: this keeps the comparison fair and avoids introducing new data-related uncertainty.
+   Datasets: pendulum, reacher-angle, reacher-RGB.
 
-- Quantitative: MSE and latent-state quality metric (for example $R^2$ where available).
-- Qualitative: at least one failure/success comparison plot.
-- Reporting: explicit note on what was matched versus not matched from the paper.
+2. Run staged attribution experiments.
+   Why: this is the most direct response to the attribution criticism.
+   Order: ELBO baseline, then +CO, then +EKVAE, then +VHP ablation.
 
-## Main Risks and How We Handle Them
+3. Limit the baseline set to a representative minimum.
+   Why: we still get meaningful comparison without spending most of the project on rebuilding many models.
+   Suggested minimum: one standard DSSM baseline, one KVAE-family baseline, and EKVAE.
 
-1. Too many moving parts.
-   Mitigation: stage as CO first, then EKVAE, then VHP ablations.
-2. Attribution unclear.
-   Mitigation: one-change-at-a-time experiments.
-3. Missing source code.
-   Mitigation: strict config tracking, fixed seeds, and run logs.
-4. Evaluation ambiguity.
-   Mitigation: write explicit conditioning/sampling protocol before running full experiments.
+4. Set a realistic replication target from the start.
+   Why: exact number matching is risky without official code and hidden implementation details.
+   Target: trend-level replication and component-wise direction; metric-range closeness where possible.
 
-5. Scope drift due to missing code.
-   Mitigation: define a fixed "minimum reproducibility" endpoint before adding extra models/datasets.
+### Defer Until Core Results Are Stable
 
-## No Official Source Code: Practical Implications
+1. New transfer datasets (finance/health beyond the paper setup).
+   Why: useful extension, but not needed to answer the core replication question.
 
-- Expect longer debugging cycles and possible mismatch with undocumented implementation details.
-- Treat this as an independent reimplementation rather than exact code replication.
-- Success should be judged on methodological faithfulness and trend agreement, unless supervisor requires exact numeric reproduction.
+2. Full baseline-family reproduction.
+   Why: high effort for limited immediate evidence.
+
+3. Large sensitivity sweeps (for example full $D_0$ grids).
+   Why: important later, but not first-pass critical.
+
+### Remove from Immediate Scope
+
+1. RL/disentanglement extensions and broader side narratives.
+   Why: outside the core supervisor-critical objective.
+
+2. Strong Jacobian/linearization correctness claims without dedicated diagnostics.
+   Why: difficult to defend properly unless we run focused verification experiments.
+
+3. Exact numeric replication as a hard milestone.
+   Why: too brittle under independent reimplementation conditions.
+
+## Why This Scope Cut Is Reasonable
+
+- It addresses the two biggest risks raised by reviews: attribution and reproducibility.
+- It lowers delivery risk in a no-repo setting.
+- It keeps the scientific core intact instead of spreading effort too thin.
+- It gives a clean workflow: validate the core claim first, then broaden if time allows.
+
+## Minimum Deliverable for This Reduced Scope
+
+1. A complete experiment matrix on paper datasets with staged components (ELBO, +CO, +EKVAE, +VHP).
+2. Quantitative metrics: MSE and a latent-state quality metric (for example $R^2$, where available).
+3. At least one qualitative trajectory plot per dataset family showing success/failure behavior.
+4. A reproducibility note stating what matched, what did not, and likely reasons for differences.
+
+## Decisions to Confirm with Supervisor
+
+1. Is trend-level replication acceptable as the primary endpoint?
+2. Is the reduced baseline set acceptable for this stage?
+3. Are extra datasets explicitly deferred until core validation is complete?
+4. Are RL/disentanglement and strong Jacobian claims out of immediate scope?
+5. Should we include one small $D_0$ sensitivity check now, or defer it?
+
+## Risk Controls During Execution
+
+1. Too many moving parts: only add one component at a time.
+2. Attribution confusion: keep one-change-at-a-time experiment design.
+3. No source code: strict config tracking, fixed seeds, and run logs.
+4. Evaluation drift: define conditioning/sampling/reporting protocol before full runs.
 
 ## Meeting Notes
 
