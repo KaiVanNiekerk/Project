@@ -34,7 +34,7 @@ This remains the long-term plan, but it is too broad for the first phase if we k
 
 ### Scope and success criteria
 
-1. Is trend-level replication acceptable for D1, given the lack of official code?
+1. Is trend-level replication acceptable for the first phase, given the lack of official code?
 2. Is the reduced baseline set acceptable for the first milestone?
 3. Should the first phase stay strictly on the paper datasets, with any new datasets deferred?
 4. Do you want the baseline set limited to one standard DSSM, one KVAE-family baseline, and EKVAE?
@@ -44,7 +44,7 @@ This remains the long-term plan, but it is too broad for the first phase if we k
 
 1. Which latent-state quality metric should be mandatory when $R^2$ is unavailable?
 2. What is the minimum qualitative evidence expected?
-3. Should we skip sensitivity checks for D1, or keep only a small one?
+3. Should we skip sensitivity checks in the first phase, or keep only a small one?
 4. For CO, should $D_0$ be fixed per dataset or allow a small sensitivity range?
 5. For EKVAE, which implementation details matter most: transition model, decoder, filter update, or all of them?
 6. For VHP, should it stay as a later comparison step only if the earlier stages are stable?
