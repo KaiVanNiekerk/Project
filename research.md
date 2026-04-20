@@ -13,10 +13,12 @@ Practical note:
 - Prioritize controlled experiments that test one part at a time rather than broad extension work.
 
 **Notes / watch-outs:**
+
 - Keep the first pass focused on the main trend, not every table entry.
 - Do not let the combined setup hide what CO, EKVAE, and VHP each contribute.
 
 **Toy-data / short-sequence caveat:**
+
 - If the paper mostly used toy data or very short sequences, the reported gains may be easier to achieve than on longer, messier time series.
 - Short sequences can make forecasting, filtering, and reconstruction look cleaner than they will on real datasets with longer temporal dependence.
 - For our project, that means we should expect more difficulty when moving to longer-horizon data, and we should not treat toy-data performance as proof of broad generalization.
@@ -68,6 +70,7 @@ What this means:
 - The model tries to make reconstruction strong while keeping the latent space well behaved.
 
 **Detailed explanation:**
+
 - The first term, $\mathbb{E}_{q(z|x)}[\log p(x|z)]$, is the **distortion** term. It measures how well the model reconstructs the observed data from the latent variable $z$. Low distortion means the reconstruction is close to the input; high distortion means more information was lost in compression. In EKVAE, distortion checks whether the latent state still preserves the underlying system behaviour over time.
 
 - The second term, $\text{KL}(q(z|x) \| p(z))$, is the **rate** term. It measures how much information the encoder stores in the latent code compared with the prior. A large KL means the model is using more latent capacity; a small KL means the code is more compressed. CO controls this term directly through the threshold $D_0$.
@@ -78,6 +81,7 @@ The trade-off is simple: too much distortion focus can lead to overfitting, whil
 The constrained optimization (CO) framework modifies this standard ELBO by introducing a constraint on the rate term. Instead of freely balancing reconstruction vs regularization, CO enforces that the KL divergence stays below a target threshold $D_0$. This allows us to explicitly control the trade-off between model complexity and reconstruction quality.
 
 **Notes / watch-outs:**
+
 - The distortion-rate balance is easy to overstate; the practical goal is useful reconstruction, not perfect compression.
 - If the ELBO baseline is weak, later comparisons become harder to interpret.
 
@@ -110,6 +114,7 @@ What this means:
 - The product notation means the same kind of step is repeated across the whole sequence.
 
 **Why DSSM is useful for dynamics:**
+
 - the latent state is an explicit estimate of the system state;
 - the next state depends on the current state, which fits many physical systems;
 - it is often a cleaner fit than an unconstrained RNN.
@@ -121,6 +126,7 @@ $$q(z_{1:T} | x_{1:T}) = q(z_1 | x_{1:T}) \prod_{t=2}^{T} q(z_t | z_{t-1}, x_{1:
 This is tractable only under certain assumptions (like linearity or Gaussian transitions), which is where the Kalman filter/smoother comes in for the standard KVAE, and the Extended Kalman Filter for EKVAE.
 
 **Notes / watch-outs:**
+
 - DSSM assumptions are clean mathematically, but real sequence data may not follow the Markov assumption exactly.
 - If the state transition is too weak, the model can collapse into a decoder-heavy solution.
 
@@ -140,6 +146,7 @@ What this means:
 - A smaller $\beta$ lets the model focus more on reconstruction.
 
 The weight $\beta$ controls the trade-off, but:
+
 - too small, and the model overfits;
 - too large, and the model under-fits;
 - the right value usually needs tuning for each dataset.
@@ -169,24 +176,28 @@ Why minimize rate at all:
 So CO minimizes rate under a reconstruction constraint, which is the key balance for learning useful system dynamics.
 
 **How it works in practice:**
+
 1. Set a target rate threshold $D_0$.
 2. Adjust $\lambda$ during training so the KL stays near that target.
 3. Increase the penalty if KL rises too high.
 4. Relax it if KL stays too low.
 
 **Why CO is useful:**
+
 - $D_0$ has a clear information meaning.
 - the weight is adapted during training instead of chosen by hand;
 - it is a structured rate-distortion setup.
 
 **How CO relates to this project:**
 Your staged experiments include:
+
 1. **Stage A:** ELBO baseline (standard $\beta$-weighted training)
 2. **Stage B:** +CO (same model, but with constrained optimization)
 
 This tests whether CO improves the same model under the same data.
 
 **Practical implications for implementation:**
+
 - update $\lambda$ during training;
 - choose a reasonable $D_0$ for each dataset;
 - keep the updates stable so training does not oscillate.
@@ -195,10 +206,12 @@ This tests whether CO improves the same model under the same data.
 The sensitivity to $D_0$ is real. If you set it too high, the constraint is meaningless. If you set it too low, the optimizer might fail to find a feasible solution. This is why the authors note that finding the "sweet spot" is important but not straightforward.
 
 **Notes / watch-outs:**
+
 - CO should be treated as a controlled experiment, not an automatic improvement.
 - The main implementation risk is unstable tuning of $D_0$ and $\lambda$.
 
 **Toy-data / short-sequence caveat:**
+
 - CO may look especially stable on short or simple sequences, because the latent budget is easier to manage.
 - On longer sequences, the same $D_0$ may behave differently, so tuning expectations should stay realistic.
 
@@ -259,6 +272,7 @@ What this means:
 This Jacobian gives a local linear approximation of the nonlinear transition. The filter then uses that approximation to predict and correct the latent state.
 
 At a high level, the EKF step does two things:
+
 1. **Prediction:** use the learned dynamics model to predict the next latent state.
 2. **Update:** use the new observation to correct that prediction.
 
@@ -271,6 +285,7 @@ It is where ELBO, DSSM, CO, and VHP come together, so it is the main model we wa
 The paper's claim is that EKVAE should capture temporal structure better than a plain VAE or a generic recurrent model.
 
 **Why it can be tricky in practice:**
+
 - The EKF approximation depends on the local Jacobian, so errors in linearization can affect performance.
 - Training can be sensitive because the model has multiple moving parts: encoder, decoder, transition model, and filtering logic.
 - If the latent dynamics are too nonlinear or the observations too noisy, the approximate linearization may struggle.
@@ -279,10 +294,12 @@ The paper's claim is that EKVAE should capture temporal structure better than a 
 We do not need every proof; we need the latent transition, observation model, and EKF-style inference implemented consistently.
 
 **Notes / watch-outs:**
+
 - EKVAE is more fragile than a simple VAE because transition, decoder, and filtering all need to work together.
 - Linearization errors can matter more than they do in simpler models.
 
 **Toy-data / short-sequence caveat:**
+
 - EKVAE can look strong on short toy sequences because the nonlinear dynamics are easier to track.
 - Longer sequences or noisier datasets may expose filtering errors more clearly, so we should expect performance to drop if the paper mostly used short horizons.
 
@@ -311,6 +328,7 @@ What this means:
 where $h_t$ is a higher-level latent variable that shapes the distribution of $z_t$. This lets the model express latent structure at more than one level.
 
 **How to interpret it:**
+
 - $z_t$ still represents the actual dynamics.
 - $h_t$ shapes how $z_t$ is distributed over time.
 - Together, they make the prior more expressive than a plain Gaussian.
@@ -320,6 +338,7 @@ Simple priors are easier to infer with, but they can be a poor fit for real sequ
 
 **How it relates to this project:**
 VHP is the final later stage in our staged comparison:
+
 1. ELBO baseline
 2. +CO
 3. +EKVAE
@@ -328,20 +347,24 @@ VHP is the final later stage in our staged comparison:
 It lets us test whether the richer prior improves prediction or system identification beyond the earlier stages.
 
 **Practical trade-off:**
+
 - **Benefit:** a more flexible prior that may fit complex dynamics better.
 - **Cost:** more parameters, more computation, and more overfitting risk on small datasets.
 - **Interpretation:** if it does not clearly improve over +EKVAE, the extra complexity may not be worth it.
 
 **What to watch for in implementation:**
+
 - training may become less stable;
 - the prior may be harder to tune;
 - gains may depend on the dataset, so VHP should stay a later comparison step.
 
 **Notes / watch-outs:**
+
 - VHP is the most likely place for diminishing returns if the dataset is small or simple.
 - Keep it as a later stage, not the first thing to debug.
 
 **Toy-data / short-sequence caveat:**
+
 - A richer prior can look helpful on small toy data but add less value on larger datasets if the extra complexity is not needed.
 - If the source paper relied on short sequences, VHP may be over-credited relative to how it would behave on longer time horizons.
 
@@ -420,6 +443,7 @@ Based on the review feedback and the no-code constraint, this is what should sta
    Why: too brittle in an independent reimplementation setting.
 
 **Notes / watch-outs:**
+
 - The safest reduction is to preserve the paper datasets and core model stages, then only expand if the first results are stable.
 - Extra datasets and heavy sweeps should wait until the baseline chain is working.
 
@@ -440,5 +464,6 @@ These are known limitations or practical challenges with the EKVAE approach itse
    The EKF uses a neural network to approximate the Jacobian rather than computing exact derivatives by hand. This is efficient but approximate, so the learned linearization may be useful for training without perfectly matching the true system Jacobian.
 
 **Notes / watch-outs:**
+
 - These are not reasons to drop the method outright; they are reasons to keep expectations realistic.
 - In practice, they mostly argue for careful component checks, clear reporting, and not overclaiming exact reproduction.
