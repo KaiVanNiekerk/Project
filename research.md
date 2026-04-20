@@ -197,10 +197,7 @@ Your staged experiments include:
 This tests whether CO improves the same model under the same data.
 
 **Practical implications for implementation:**
-
-- update $\lambda$ during training;
-- choose a reasonable $D_0$ for each dataset;
-- keep the updates stable so training does not oscillate.
+- Keep $\lambda$ updates stable and choose a realistic $D_0$ for each dataset.
 
 **Risk to watch (from Plausible Issues):**
 The sensitivity to $D_0$ is real. If you set it too high, the constraint is meaningless. If you set it too low, the optimizer might fail to find a feasible solution. This is why the authors note that finding the "sweet spot" is important but not straightforward.
@@ -216,19 +213,17 @@ The sensitivity to $D_0$ is real. If you set it too high, the constraint is mean
 - On longer sequences, the same $D_0$ may behave differently, so tuning expectations should stay realistic.
 
 **Why this matters in the paper:**
-Section 3 makes one main point: a high ELBO does not automatically mean the model has learned the real dynamics. The paper therefore uses a constrained optimisation view: keep the rate term $R$ small while requiring the distortion term $D$ to stay below a target value $D_0$.
+Section 3 makes one main point: a high ELBO does not automatically mean the model has learned real dynamics. The constrained setup addresses this by keeping rate small while requiring distortion to stay below $D_0$.
 
-In practical terms, $D_0$ is the reconstruction quality we are willing to accept. If it is too strict, the model may struggle to satisfy the constraint. If it is too loose, the model may reconstruct poorly and still pass.
-
-The Lagrangian form,
+The Lagrangian
 $$
-\mathcal{L}(\theta,\psi,\phi; \lambda) = R(\psi,\phi) + \lambda\big(D(\theta,\phi) - D_0\big),
+\mathcal{L}(\theta,\psi,\phi; \lambda) = R(\psi,\phi) + \lambda\big(D(\theta,\phi) - D_0\big)
 $$
-is the training version of that idea. It adds a penalty whenever distortion rises above the target, and $\lambda$ controls how strongly that penalty is enforced.
+is the training form of that idea: $\lambda$ increases pressure when distortion exceeds the target.
 
-The EM link is simple but important. In the usual ELBO setup, training alternates between updating the latent posterior and updating the model parameters. The CO version keeps that alternating structure, but the posterior update must also respect the distortion target. That is the main point of the constrained setup: keep reconstruction good enough first, then learn dynamics from the compressed latent representation.
+Why the EM relation matters: training still alternates between posterior updates and parameter updates, but now the posterior update is also constrained by distortion quality. This keeps reconstruction reliable enough before using the latent states to judge dynamics learning.
 
-The key takeaway for this project is that CO is not just a better ELBO weight. It is a way of forcing the model to maintain useful reconstruction before we judge whether it has learned the system dynamics.
+Key takeaway: CO is not just another ELBO weight. It enforces a reconstruction-quality floor so dynamics claims are more trustworthy.
 
 ### Extended Kalman VAE (EKVAE)
 
@@ -256,8 +251,6 @@ What this means:
 - $g_\phi$ is the observation or decoder model.
 - It turns the hidden state into the visible observation.
 - $\eta_t$ represents observation noise.
-
-where $f_\theta$ is the learned transition model, $g_\phi$ is the observation/decoder model, and $\epsilon_t, \eta_t$ are noise terms.
 
 **How the Extended Kalman part works:**
 Because the transition is nonlinear, EKVAE cannot use a standard linear Kalman update directly. Instead, it linearizes the transition around the current estimate using a Jacobian:
@@ -324,8 +317,6 @@ What this means:
 - $p(h_t)$ gives the distribution of that higher-level variable.
 - $p(z_t \mid h_t)$ says the actual latent state depends on that higher-level structure.
 - This makes the prior more flexible than a single Gaussian.
-
-where $h_t$ is a higher-level latent variable that shapes the distribution of $z_t$. This lets the model express latent structure at more than one level.
 
 **How to interpret it:**
 
