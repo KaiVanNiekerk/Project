@@ -194,6 +194,21 @@ The sensitivity to $D_0$ is real. If you set it too high, the constraint is mean
 - CO may look especially stable on short or simple sequences, because the latent budget is easier to manage.
 - On longer sequences, the same $D_0$ may behave differently, so tuning expectations should stay realistic.
 
+**Why this matters in the paper:**
+Section 3 makes one main point: a high ELBO does not automatically mean the model has learned the real dynamics. The paper therefore uses a constrained optimisation view: keep the rate term $R$ small while requiring the distortion term $D$ to stay below a target value $D_0$.
+
+In practical terms, $D_0$ is the reconstruction quality we are willing to accept. If it is too strict, the model may struggle to satisfy the constraint. If it is too loose, the model may reconstruct poorly and still pass.
+
+The Lagrangian form,
+$$
+\mathcal{L}(\theta,\psi,\phi; \lambda) = R(\psi,\phi) + \lambda\big(D(\theta,\phi) - D_0\big),
+$$
+is the training version of that idea. It adds a penalty whenever distortion rises above the target, and $\lambda$ controls how strongly that penalty is enforced.
+
+The EM link is simple but important. In the usual ELBO setup, training alternates between updating the latent posterior and updating the model parameters. The CO version keeps that alternating structure, but the posterior update must also respect the distortion target. That is the main point of the constrained setup: keep reconstruction good enough first, then learn dynamics from the compressed latent representation.
+
+The key takeaway for this project is that CO is not just a better ELBO weight. It is a way of forcing the model to maintain useful reconstruction before we judge whether it has learned the system dynamics.
+
 ### Extended Kalman VAE (EKVAE)
 
 **What it is:**
