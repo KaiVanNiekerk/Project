@@ -160,6 +160,14 @@ What this means:
 - $\lambda$ is adjusted during training to keep the KL near that target.
 - The model is no longer balancing the terms with a fixed weight; it is enforcing a limit.
 
+Why minimize rate at all:
+
+- Rate measures how much extra information the latent code stores beyond the prior.
+- If rate is too high, the model can memorize observations instead of learning stable dynamics.
+- Minimizing rate encourages compact latent states, while the $D_0$ constraint keeps reconstruction quality acceptable.
+
+So CO minimizes rate under a reconstruction constraint, which is the key balance for learning useful system dynamics.
+
 **How it works in practice:**
 1. Set a target rate threshold $D_0$.
 2. Adjust $\lambda$ during training so the KL stays near that target.
