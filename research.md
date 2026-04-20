@@ -197,6 +197,7 @@ Your staged experiments include:
 This tests whether CO improves the same model under the same data.
 
 **Practical implications for implementation:**
+
 - Keep $\lambda$ updates stable and choose a realistic $D_0$ for each dataset.
 
 **Risk to watch (from Plausible Issues):**
