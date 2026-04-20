@@ -252,13 +252,12 @@ Initial dataset scope (paper-aligned reproduction):
 
 Interpretation note:
 
-	These paper datasets are useful because they are controlled and easy to interpret.
-	Treat exact numeric match as unrealistic; evaluate trend-level agreement and the main component effects.
-	Lock the minimum reproducible scope (first models + first dataset).
-	Only then test a small number of harder datasets to see whether the method works beyond the paper setting.
-	Define the research question, core concepts, scope, and initial approach.
-	Run a small set of additional test datasets, then consolidate findings and limitations.
-- Prefer longer sequences or noisier real-world series as stress tests.
+- The paper datasets are useful because they are controlled and easy to interpret.
+- Treat exact numeric match as unrealistic; focus on trend-level agreement and the main effects.
+- Keep the minimum reproducible scope small at first, with later datasets used only after the core setup is stable.
+- This keeps the first phase focused on paper-faithful reproduction before moving to harder tests.
+- If the source experiments are short-horizon or toy-like, treat them as a limited test of the method rather than evidence that it will work equally well on harder datasets.
+- Prefer longer sequences or noisier real-world series as later validation checks.
 - If finance is used, treat it as a robustness test rather than a primary benchmark.
 
 If constrained by time/compute/data:
@@ -277,16 +276,16 @@ If constrained by time/compute/data:
 ## 6. Project Stages
 
 - Stage 1: Framing and planning.
-	Define the research question, core concepts, scope, and initial methodology.
+  Define the research question, core concepts, scope, and initial methodology.
 
 - Stage 2: Early implementation and validation.
-	Build the first end-to-end pipeline and produce initial comparative results on the paper datasets.
+  Build the first end-to-end pipeline and produce initial comparative results on the paper datasets.
 
 - Stage 3: Full experimentation and analysis.
-	Run a small set of additional stress-test datasets, then consolidate findings and limitations.
+  Run a small set of additional stress-test datasets, then consolidate findings and limitations.
 
 - Stage 4: Communication and presentation.
-	Present the work through written reporting and visual summaries for non-specialist and specialist audiences.
+  Present the work through written reporting and visual summaries for non-specialist and specialist audiences.
 
 ## 7. Expected Limitations
 
@@ -294,4 +293,3 @@ If constrained by time/compute/data:
 - Finance-style data is likely to be much harder than the pendulum or reacher benchmarks.
 - Short-sequence results should not be treated as proof that the method generalises broadly.
 - A failure on harder datasets may reflect dataset difficulty rather than a broken implementation.
-
