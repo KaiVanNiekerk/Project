@@ -56,6 +56,14 @@ $$
 p(x_{1:T}, z_{1:T} \mid u_{1:T}) = p(z_1)\prod_{t=2}^{T} p(z_t \mid z_{t-1}, u_{t-1})\prod_{t=1}^{T} p(x_t \mid z_t)
 $$
 
+What this means:
+
+- $p(x_{1:T}, z_{1:T} \mid u_{1:T})$ is the full sequence model.
+- $p(z_1)$ is the starting prior over the hidden state.
+- $p(z_t \mid z_{t-1}, u_{t-1})$ gives the rule for how the hidden state changes over time.
+- $p(x_t \mid z_t)$ gives the rule for how each observation is generated from the hidden state.
+- The product notation means the same kind of transition and observation step is repeated through the whole sequence.
+
 In this project:
 
 - Base framework for all compared models.
@@ -146,6 +154,13 @@ D = -\mathbb{E}_{q_\phi(z_{1:T} \mid x_{1:T},u_{1:T})}\left[\log p_\theta(x_{1:T
 R = \mathrm{KL}\left(q_\phi(z_{1:T} \mid x_{1:T},u_{1:T})\;\|\;p_\psi(z_{1:T} \mid u_{1:T})\right)
 $$
 
+What this means:
+
+- $D$ is the reconstruction or distortion term.
+- $R$ is the rate term, which measures how far the learned posterior is from the prior.
+- The model is trying to make $D$ small and keep $R$ under control.
+- This is the basic rate-distortion trade-off used throughout the method.
+
 Interpretation:
 
 - $D$ measures reconstruction quality.
@@ -174,6 +189,13 @@ $$
 \mathcal{L} = R + \lambda(D - D_0), \quad \lambda \ge 0
 $$
 
+What this means:
+
+- $D_0$ is the target distortion level.
+- The model is asked to keep distortion below that target while reducing the rate term.
+- $\lambda$ is the penalty weight that enforces the constraint during training.
+- This gives a more controlled version of the ELBO trade-off.
+
 In this project:
 
 - Main mechanism to test against standard ELBO/annealing training.
@@ -189,6 +211,13 @@ Formula:
 $$
 p_{\psi_0}(z_1) = \int p_{\psi_0}(z_1 \mid \zeta)p(\zeta)\,d\zeta
 $$
+
+What this means:
+
+- $z_1$ is the initial latent state.
+- $\zeta$ is a higher-level variable that shapes the prior over $z_1$.
+- The integral means the final prior is built by averaging over that higher-level variable.
+- This makes the starting prior more flexible than a single fixed Gaussian.
 
 In this project:
 
@@ -206,6 +235,14 @@ $$
 p_\psi(z_{t+1} \mid z_t,u_t)=\mathcal{N}\left(z_{t+1} \mid F_\psi(z_t,u_t)z_t + B_\psi(z_t,u_t)u_t,\;Q_\psi(z_t,u_t)\right)
 $$
 
+What this means:
+
+- The next hidden state is modeled as a Gaussian distribution.
+- The mean is built from the current hidden state and the control input.
+- $F_\psi$ controls how the current state affects the next state.
+- $B_\psi$ controls how the control input affects the next state.
+- $Q_\psi$ is the covariance, which describes the uncertainty in the transition.
+
 In this project:
 
 - Core EKVAE mechanism for nonlinear dynamics modelling with uncertainty handling.
@@ -218,11 +255,28 @@ $$
 \mathrm{MSE} = \frac{1}{NT}\sum_{n=1}^{N}\sum_{t=1}^{T} \lVert \hat{x}_t^{(n)} - x_t^{(n)} \rVert_2^2
 $$
 
+What this means:
+
+- $\hat{x}_t^{(n)}$ is the model's prediction.
+- $x_t^{(n)}$ is the true value.
+- The squared difference measures how far the prediction is from the truth.
+- Averaging over all sequences and time steps gives one overall error score.
+
 Latent-state identifiability:
 
 $$
 R^2 = 1 - \frac{\sum_i (y_i - \hat{y}_i)^2}{\sum_i (y_i - \bar{y})^2}
 $$
+
+What this means:
+
+- $y_i$ is the true target value.
+- $\hat{y}_i$ is the predicted target value.
+- $\bar{y}$ is the average of the true target values.
+- The numerator measures prediction error.
+- The denominator measures the total variation in the true values.
+
+A higher $R^2$ means the latent variables line up better with the known underlying state.
 
 In this project:
 

@@ -25,6 +25,34 @@ Practical note:
 
 Use this order for implementation: ELBO/DSSM first, then CO, then EKVAE, then VHP.
 
+### How to Read the Paper Background
+
+The background section of the paper is setting up a simple idea: we want to model a sequence of observations while also keeping track of a hidden state that explains how the sequence evolves.
+
+In the notation used there:
+
+- $x_{1:T}$ is the observed sequence.
+- $z_{1:T}$ is the hidden latent state sequence.
+- $u_{1:T}$ is an optional control input sequence, such as actions.
+
+The main assumption is the Markov assumption. In simple terms, this means the next hidden state is assumed to depend only on the current hidden state, not on the whole past. That is why the model is written as a product of step-by-step transition and observation terms. The latent state acts like the model's internal memory of the system.
+
+The factorization in the paper says two things:
+
+1. The hidden state evolves over time according to a transition model.
+2. Each observation is generated from the current hidden state.
+
+This is useful because it separates the dynamics from the observations. The dynamics describe how the system changes; the observation model describes how we see that system through noisy measurements.
+
+The ELBO then gives the training objective for this setup. It can be read as a balance between two parts:
+
+- reconstruction quality, which asks whether the model can explain the observed sequence well;
+- compression or regularisation, which asks whether the latent representation stays compact and does not store unnecessary detail.
+
+In the paper's notation, this is often described as distortion and rate. Distortion is the part that rewards good reconstruction. Rate is the part that measures how far the learned posterior is from the prior, which is another way of measuring how much information the latent state is using.
+
+So the background section is really establishing the core trade-off of the whole method: a model should both reconstruct the sequence well and keep a sensible hidden state representation that explains the dynamics rather than memorising the data.
+
 ### Evidence Lower Bound (ELBO)
 
 **What it is:**
@@ -32,6 +60,12 @@ The ELBO is the core objective function in variational inference. It provides a 
 
 **The formula:**
 $$\text{ELBO} = \mathbb{E}_{q(z|x)}[\log p(x|z)] - \text{KL}(q(z|x) \| p(z))$$
+
+What this means:
+
+- The expectation term measures how well the model can reconstruct the observed data from the latent variable.
+- The KL term measures how far the learned latent distribution is from the prior.
+- The model tries to make reconstruction strong while keeping the latent space well behaved.
 
 **Detailed explanation:**
 - The first term, $\mathbb{E}_{q(z|x)}[\log p(x|z)]$, is the **distortion** term. It measures how well the model reconstructs the observed data from the latent variable $z$. Low distortion means the reconstruction is close to the input; high distortion means more information was lost in compression. In EKVAE, distortion checks whether the latent state still preserves the underlying system behaviour over time.
@@ -68,6 +102,13 @@ $$p(x_{1:T}, z_{1:T}) = p(z_1) \prod_{t=2}^{T} p(z_t | z_{t-1}) \prod_{t=1}^{T} 
 
 This factorization says: the full sequence likelihood breaks down into a prior on the initial state, a product of transition probabilities, and a product of observation probabilities.
 
+What this means:
+
+- $p(z_1)$ gives the starting hidden state.
+- $p(z_t | z_{t-1})$ gives the rule for how the hidden state evolves from one step to the next.
+- $p(x_t | z_t)$ gives the rule for how each observation is produced from the hidden state.
+- The product notation means the same kind of step is repeated across the whole sequence.
+
 **Why DSSM is useful for dynamics:**
 - the latent state is an explicit estimate of the system state;
 - the next state depends on the current state, which fits many physical systems;
@@ -92,6 +133,12 @@ Constrained Optimization is a version of ELBO training that puts an explicit lim
 In weighted ELBO training, we optimize:
 $$\text{ELBO} = \mathbb{E}_{q(z|x)}[\log p(x|z)] - \beta \cdot \text{KL}(q(z|x) \| p(z))$$
 
+What this means:
+
+- $\beta$ is a hand-chosen weight on the KL term.
+- A larger $\beta$ pushes the model to keep the latent space smaller.
+- A smaller $\beta$ lets the model focus more on reconstruction.
+
 The weight $\beta$ controls the trade-off, but:
 - too small, and the model overfits;
 - too large, and the model under-fits;
@@ -106,6 +153,12 @@ This is solved using the Lagrangian formulation:
 $$\mathcal{L} = \mathbb{E}_{q(z|x)}[\log p(x|z)] - \lambda \cdot (\text{KL}(q(z|x) \| p(z)) - D_0)$$
 
 where $\lambda$ is a Lagrange multiplier updated during training.
+
+What this means:
+
+- $D_0$ is the target KL level.
+- $\lambda$ is adjusted during training to keep the KL near that target.
+- The model is no longer balancing the terms with a fixed weight; it is enforcing a limit.
 
 **How it works in practice:**
 1. Set a target rate threshold $D_0$.
@@ -153,14 +206,32 @@ Plain Kalman models work well when the dynamics are linear and Gaussian, but tha
 The latent dynamics follow a nonlinear transition such as:
 $$z_t = f_\theta(z_{t-1}) + \epsilon_t$$
 
+What this means:
+
+- $f_\theta$ is the learned transition model.
+- It predicts the next hidden state from the current hidden state.
+- $\epsilon_t$ represents random variation or modelling error.
+
 and the observations are generated from the latent state through a decoder such as:
 $$x_t = g_\phi(z_t) + \eta_t$$
+
+What this means:
+
+- $g_\phi$ is the observation or decoder model.
+- It turns the hidden state into the visible observation.
+- $\eta_t$ represents observation noise.
 
 where $f_\theta$ is the learned transition model, $g_\phi$ is the observation/decoder model, and $\epsilon_t, \eta_t$ are noise terms.
 
 **How the Extended Kalman part works:**
 Because the transition is nonlinear, EKVAE cannot use a standard linear Kalman update directly. Instead, it linearizes the transition around the current estimate using a Jacobian:
 $$F_t = \frac{\partial f_\theta}{\partial z}\bigg|_{z = \hat{z}_{t-1}}$$
+
+What this means:
+
+- $F_t$ is the local linear approximation of the dynamics.
+- The derivative tells us how the transition changes near the current estimate.
+- EKVAE uses this local slope to perform the Kalman-style update.
 
 This Jacobian gives a local linear approximation of the nonlinear transition. The filter then uses that approximation to predict and correct the latent state.
 
@@ -207,6 +278,13 @@ $$p(z_t)$$
 but something closer to a layered prior such as:
 $$p(z_t, h_t) = p(z_t \mid h_t) p(h_t)$$
 
+What this means:
+
+- $h_t$ is a higher-level latent variable.
+- $p(h_t)$ gives the distribution of that higher-level variable.
+- $p(z_t \mid h_t)$ says the actual latent state depends on that higher-level structure.
+- This makes the prior more flexible than a single Gaussian.
+
 where $h_t$ is a higher-level latent variable that shapes the distribution of $z_t$. This lets the model express latent structure at more than one level.
 
 **How to interpret it:**
@@ -243,6 +321,39 @@ It lets us test whether the richer prior improves prediction or system identific
 **Toy-data / short-sequence caveat:**
 - A richer prior can look helpful on small toy data but add less value on larger datasets if the extra complexity is not needed.
 - If the source paper relied on short sequences, VHP may be over-credited relative to how it would behave on longer time horizons.
+
+### Evaluation Metrics
+
+Two simple formulas are used to judge the model's performance:
+
+**MSE (mean squared error):**
+$$
+\mathrm{MSE} = \frac{1}{NT}\sum_{n=1}^{N}\sum_{t=1}^{T} \lVert \hat{x}_t^{(n)} - x_t^{(n)} \rVert_2^2
+$$
+
+What this means:
+
+- $\hat{x}_t^{(n)}$ is the model's predicted value.
+- $x_t^{(n)}$ is the true value.
+- The squared difference measures how far the prediction is from the truth.
+- Averaging over all sequences and time steps gives one overall error score.
+
+Lower MSE means the model is reconstructing or forecasting more accurately.
+
+**$R^2$ (coefficient of determination):**
+$$
+R^2 = 1 - \frac{\sum_i (y_i - \hat{y}_i)^2}{\sum_i (y_i - \bar{y})^2}
+$$
+
+What this means:
+
+- $y_i$ is the true target value.
+- $\hat{y}_i$ is the predicted target value.
+- $\bar{y}$ is the average of the true target values.
+- The numerator measures prediction error.
+- The denominator measures the total variation in the true values.
+
+An $R^2$ value near 1 means the latent variables explain the target state well. A value near 0 means the model is doing about as well as just predicting the mean. Negative values mean the model is doing worse than that simple baseline.
 
 ## Scope Plan
 
