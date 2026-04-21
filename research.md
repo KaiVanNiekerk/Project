@@ -386,10 +386,39 @@ The important points are:
 - A hierarchical prior is used as a practical way to approximate that better prior.
 - The variational form makes this tractable and fits the same rate-distortion logic as the rest of the paper.
 
+Why the initial prior matters so much:
+
+The key insight is that $z_1$ is not just a starting point—it affects the entire sequence because each $z_t$ depends on $z_{t-1}$. If you start with an unrealistic prior for $z_1$, the model has to fight to explain the data from an incorrect starting position. This wastes capacity in the latent representation.
+
+More concretely: if $p(z_1)$ is too narrow (like the standard normal), the inference network $q_\phi(z_1 \mid x, u)$ will be penalized in the KL term for deviating from it. But the data may naturally lead to very different initial latent states. The model then either:
+
+1. Accepts a high KL penalty (increasing the rate term), which reduces the budget for reconstruction quality, or
+2. Stays close to the prior despite it being wrong, which forces the transition model to compensate and weakens the dynamics learning.
+
+Either way, a poor prior on $z_1$ undermines what the model is trying to learn.
+
+The solution is to learn the prior from the data itself. The empirical Bayes target $p^*(z_1) = \mathbb{E}_{p_D}[q_\phi(z_1 \mid x, u)]$ says: look at what the inference network learns as the initial state across your entire dataset, and use that as your prior. This way, the prior and the inferred initial states are naturally aligned, the KL term is reduced, and the model has more capacity to capture both reconstruction quality and meaningful dynamics.
+
+Connection to rate-distortion:
+
+In the CO framework, the trade-off is between rate (KL) and distortion (reconstruction). A better prior on $z_1$ directly reduces the rate term without sacrificing distortion. This is why learning the initial distribution is not a separate concern—it is an integral part of the CO strategy. By reducing unnecessary KL, you free up capacity for the model to learn better dynamics without overfitting.
+
+Why a hierarchical prior is needed:
+
+The empirical Bayes target is ideal but not directly learnable because it requires averaging over the entire dataset during training. The hierarchical prior $p_{\psi_0}(z_1) = \int p_{\psi_0}(z_1 \mid \zeta)p(\zeta)\,d\zeta$ is the practical solution:
+
+- The latent variable $\zeta$ acts as a "hyper-parameter" for the $z_1$ distribution.
+- Marginalizing over $\zeta$ gives a more flexible family of distributions than a simple Gaussian.
+- The variational posterior $q_{\phi_0}(\zeta \mid z_1)$ lets you fit this richer prior to match the empirical distribution across your data.
+
+This two-level structure allows the learning algorithm to approximate the empirical Bayes target without needing to compute the full expectation during each training step.
+
 What to remember:
 
 - $z_1$ is not just a technical starting point; it affects the whole sequence.
+- A poor prior forces the model to choose between accepting high KL penalties or weakening the latent representation.
 - Learning the initial prior makes the KL term more meaningful and reduces unnecessary pressure on the latent representation.
+- A better prior on $z_1$ directly supports the CO objective by freeing up rate capacity for better reconstruction and dynamics.
 - This is why the section belongs with the VHP discussion: both are about making the prior more realistic so dynamics learning is easier.
 
 ### Evaluation Metrics
