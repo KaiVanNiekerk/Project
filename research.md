@@ -360,6 +360,38 @@ It lets us test whether the richer prior improves prediction or system identific
 - A richer prior can look helpful on small toy data but add less value on larger datasets if the extra complexity is not needed.
 - If the source paper relied on short sequences, VHP may be over-credited relative to how it would behave on longer time horizons.
 
+### Learning the Initial Distribution
+
+This section of the paper is about the prior for the first latent state, $z_1$. The key idea is simple: a fixed standard normal prior can be too restrictive, so the model should learn a better starting distribution from the data.
+
+The formulas to remember are:
+
+- $p(z_1) = \mathcal{N}(0, I)$ is the simple default prior the paper wants to improve on.
+- $p^*(z_1) = \mathbb{E}_{p_D}[q_\phi(z_1 \mid x, u)]$ is the empirical Bayes target: the prior should match the average posterior initial state from the data.
+- $p_{\psi_0}(z_1) = \int p_{\psi_0}(z_1 \mid \zeta)p(\zeta)\,d\zeta$ is the hierarchical prior used to approximate that target.
+- $q_{\phi_0}(\zeta \mid z_1)$ is the variational posterior used to learn the hierarchical prior.
+
+What these formulas mean together:
+
+- the standard normal prior is too simple for realistic initial states;
+- the empirical Bayes target says the prior should match the data-driven posterior initial states;
+- the hierarchical prior gives a practical way to learn that richer prior;
+- the variational posterior makes the learning tractable.
+
+The important points are:
+
+- A poor prior on $z_1$ can over-regularise the latent space and weaken the transition model.
+- If the prior does not match the data-driven initial states, the generative model may start from unrealistic latent values.
+- The paper therefore uses an empirical Bayes view: the best prior should match the average posterior initial state across the dataset.
+- A hierarchical prior is used as a practical way to approximate that better prior.
+- The variational form makes this tractable and fits the same rate-distortion logic as the rest of the paper.
+
+What to remember:
+
+- $z_1$ is not just a technical starting point; it affects the whole sequence.
+- Learning the initial prior makes the KL term more meaningful and reduces unnecessary pressure on the latent representation.
+- This is why the section belongs with the VHP discussion: both are about making the prior more realistic so dynamics learning is easier.
+
 ### Evaluation Metrics
 
 Two simple formulas are used to judge the model's performance:
