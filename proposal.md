@@ -148,7 +148,7 @@ Immediate scope:
 
 Datasets and strategy:
 
-The paper datasets are useful for validation because they are controlled and interpretable. We target trend-level agreement and main effect reproduction rather than exact numeric match. The first phase focuses on paper-faithful reproduction with these benchmarks (pendulum images at 16x16 with sequence length 15, reacher angles with sequence length 30, and reacher RGB at 64x64 with sequence length 30). 
+The paper datasets are useful for validation because they are controlled and interpretable. We target trend-level agreement and main effect reproduction rather than exact numeric match. The first phase focuses on paper-faithful reproduction with these benchmarks (pendulum images at 16x16 with sequence length 15, reacher angles with sequence length 30, and reacher RGB at 64x64 with sequence length 30).
 
 Harder, longer, or noisier datasets are later stress tests of generalization. If the source experiments used short sequences, they represent a limited rather than general test of the method. We prefer longer sequences or noisier real-world series as later validation checks, and treat finance or similar datasets as robustness tests rather than primary benchmarks.
 
