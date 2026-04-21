@@ -277,7 +277,7 @@ The main practical risk is tuning $D_0$ and $\eta$ so that the constraint is enf
 
 ### REWO-Style Multiplier Update
 
-The paper does not use a fixed multiplier update. Instead, it adopts a REWO-style rule that adapts $\lambda$ multiplicatively. The stated goal is to keep a lower bound on $\log p(x_{1:T} \mid u_{1:T})$ during training, which the paper says holds when $\lambda$ remains in the valid range.
+The paper does not use a fixed multiplier update. Instead, it adopts a REWO (Reconstruction-based Weighting for Optimization) style rule that adapts $\lambda$ multiplicatively. The stated goal is to keep a lower bound on $\log p(x_{1:T} \mid u_{1:T})$ during training, which the paper says holds when $\lambda$ remains in the valid range.
 
 The REWO-style update is:
 
