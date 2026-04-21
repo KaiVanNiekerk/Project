@@ -126,7 +126,7 @@ where $\hat{x}_t^{(n)}$ is the model's prediction and $x_t^{(n)}$ is the true va
 Latent-state identifiability is measured using the coefficient of determination:
 
 $$
-R^2 = 1 - \frac{\sum_i (y_i - \hat{y}_i)^2}{\sum_i (y_i - \bar{y})^2
+R^2 = 1 - \frac{\sum_i (y_i - \hat{y}_i)^2}{\sum_i (y_i - \bar{y})^2}
 $$
 
 where $y_i$ is the true target value, $\hat{y}_i$ is the predicted target value, and $\bar{y}$ is the average of the true target values. The numerator measures prediction error and the denominator measures the total variation in the true values. A higher $R^2$ means the latent variables line up better with the known underlying state. In this project, MSE checks rollout prediction quality, while $R^2$ checks whether learned latent variables align with known physical states.
