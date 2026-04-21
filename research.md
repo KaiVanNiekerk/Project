@@ -214,17 +214,123 @@ The sensitivity to $D_0$ is real. If you set it too high, the constraint is mean
 - On longer sequences, the same $D_0$ may behave differently, so tuning expectations should stay realistic.
 
 **Why this matters in the paper:**
-Section 3 makes one main point: a high ELBO does not automatically mean the model has learned real dynamics. The constrained setup addresses this by keeping rate small while requiring distortion to stay below $D_0$.
+Section 3 makes one main point: a high ELBO does not automatically mean the model has learned real dynamics. CO addresses this by keeping rate small while requiring distortion to stay below $D_0$. The optimization rule below implements that idea directly.
 
-The Lagrangian
+### Optimization Algorithm for CO
+
+This subsection describes the training procedure for the constrained objective. The architecture stays the same; what changes is how the encoder, decoder, and latent dynamics are updated during training.
+
+The constrained problem is:
+
 $$
-\mathcal{L}(\theta,\psi,\phi; \lambda) = R(\psi,\phi) + \lambda\big(D(\theta,\phi) - D_0\big)
+\min_{\theta,\psi,\phi} R(\psi,\phi) \quad \text{subject to} \quad D(\theta,\phi) \le D_0
 $$
-is the training form of that idea: $\lambda$ increases pressure when distortion exceeds the target.
 
-Why the EM relation matters: training still alternates between posterior updates and parameter updates, but now the posterior update is also constrained by distortion quality. This keeps reconstruction reliable enough before using the latent states to judge dynamics learning.
+Here:
 
-Key takeaway: CO is not just another ELBO weight. It enforces a reconstruction-quality floor so dynamics claims are more trustworthy.
+- $\theta$ are the generative model parameters, usually the decoder and dynamics parameters.
+- $\psi$ are the prior or transition parameters.
+- $\phi$ are the inference or encoder parameters.
+- $D(\theta,\phi)$ is the reconstruction distortion.
+- $R(\psi,\phi)$ is the rate term.
+- $D_0$ is the target distortion level.
+
+The Lagrangian form is:
+
+$$
+\mathcal{L}(\theta,\psi,\phi;\lambda) = R(\psi,\phi) + \lambda\big(D(\theta,\phi) - D_0\big)
+$$
+
+This is a saddle-point problem: the model parameters are updated to reduce the Lagrangian, while the multiplier $\lambda$ is updated to keep the distortion constraint active.
+
+In practice, training follows a primal-dual pattern:
+
+1. Compute the current reconstruction error $D$ and rate $R$ on a batch.
+2. Update the model parameters $\theta, \psi, \phi$ to reduce the Lagrangian.
+3. Update $\lambda$ so the constraint stays near the target distortion.
+
+The dual update is typically written as:
+
+$$
+\lambda \leftarrow \max\big(0,\, \lambda + \eta(D - D_0)\big)
+$$
+
+where $\eta$ is the dual learning rate.
+
+This update has a simple interpretation:
+
+- if distortion is too high, $\lambda$ increases and reconstruction is penalized more strongly;
+- if distortion is already low enough, $\lambda$ decreases or stays small, letting the model spend more capacity on lowering rate;
+- the non-negativity projection $\max(0, \cdot)$ keeps the multiplier valid.
+
+This is the part that makes CO more than a fixed-weight ELBO. Instead of choosing one static $\beta$, the optimization adapts the penalty during training so the model stays near the desired distortion level.
+
+To implement it, we need:
+
+- a reconstruction term $D$;
+- a rate term $R$;
+- a target distortion $D_0$;
+- a Lagrange multiplier $\lambda$;
+- a learning rate for both the model parameters and the dual update.
+
+The main practical risk is tuning $D_0$ and $\eta$ so that the constraint is enforced without making training unstable.
+
+### REWO-Style Multiplier Update
+
+The paper does not use a fixed multiplier update. Instead, it adopts a REWO-style rule that adapts $\lambda$ multiplicatively. The stated goal is to keep a lower bound on $\log p(x_{1:T} \mid u_{1:T})$ during training, which the paper says holds when $\lambda$ remains in the valid range.
+
+The REWO-style update is:
+
+$$
+\lambda^{(i)} = \lambda^{(i-1)} \cdot \exp\left[-\nu \cdot f_\lambda\big(\lambda^{(i-1)}, D^{(i)}(\theta,\phi) - D_0; \tau_1, \tau_2\big) \cdot \big(D^{(i)}(\theta,\phi) - D_0\big)\right]
+$$
+
+This update means:
+
+- if the distortion is above the target, the exponent pushes $\lambda$ upward so the reconstruction penalty becomes stronger;
+- if the distortion is below the target, the update relaxes $\lambda$ so the model can focus more on rate reduction;
+- the exponential form keeps $\lambda$ positive without needing a separate projection step.
+
+The helper function is
+
+$$
+f_\lambda(\lambda, \delta; \tau_1, \tau_2) = 1 - H(\delta)\tanh\big(\tau_1(1/\lambda - 1)\big) - \tau_2 H(\delta)
+$$
+
+where $\delta = D^{(i)}(\theta,\phi) - D_0$ and $H$ is the Heaviside step function. Its role is to change the slope of the multiplier update depending on whether the constraint is currently violated.
+
+In plain terms:
+
+- when $\delta \le 0$, the constraint is already satisfied, so the update behaves more gently;
+- when $\delta > 0$, the update becomes more aggressive and increases pressure on reconstruction;
+- $\tau_1$ and $\tau_2$ control how sharp that switch is.
+
+The paper also smooths the batch distortion before updating the multiplier:
+
+$$
+\hat{D}^{(i)} = (1-\alpha)\hat{D}_{ba} + \alpha\hat{D}^{(i-1)}
+$$
+
+This moving average matters because the raw batch distortion can fluctuate a lot from step to step. Smoothing makes the constraint update more stable and reduces the chance that $\lambda$ reacts to a noisy batch.
+
+The smoothing weight $\alpha$ controls how much memory the update has: larger values make the distortion estimate react more slowly, while smaller values make it respond more quickly to the current batch.
+
+### Two-Phase Training
+
+The algorithm is split into two phases.
+
+In the initial phase, the model updates only $\theta$ and $\phi$. The aim is to reduce reconstruction error first by learning the features of individual observations $x_t$. In this stage, the model is not yet updating the transition parameters.
+
+Once the inequality $D(\theta,\phi) \le D_0$ is satisfied, the algorithm switches to the main phase. At that point it updates $\theta, \psi, \phi, \psi_0,$ and $\phi_0$ together, so the model can start learning the system dynamics and the VHP at the same time.
+
+This phase split is important because it prevents the dynamics model from being learned before the reconstructions are already good enough. In other words, the method first learns to explain observations, then uses that stable reconstruction regime to learn latent dynamics.
+
+What this adds beyond the basic Lagrangian view:
+
+- the constraint is not enforced with a fixed step size;
+- the multiplier is adapted using a smoothed distortion signal;
+- the method uses a warm-up stage before learning the full dynamics model;
+- this is the part that makes the algorithm practical, not just theoretical.
 
 ### Extended Kalman VAE (EKVAE)
 
