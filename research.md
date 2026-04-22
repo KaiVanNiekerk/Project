@@ -21,7 +21,7 @@ From the reviews and rebuttal, the main points are:
 
 - If the paper mostly used toy data or very short sequences, the reported gains may be easier to achieve than on longer, messier time series.
 - Short sequences can make forecasting, filtering, and reconstruction look cleaner than they will on real datasets with longer temporal dependence.
-- For our project, that means we should expect more difficulty when moving to longer-horizon data, and we should not treat toy-data performance as proof of broad generalization.
+- For our project, we should expect more difficulty on longer-horizon data and avoid treating toy-data performance as proof of broad generalization.
 
 ## Core Concepts
 
@@ -186,8 +186,6 @@ Rate is precisely the KL divergence term $\text{KL}(q(z|x) \| p(z))$, which meas
 - If KL is large, the encoder diverges significantly from the prior, meaning the latent code is storing substantial information.
 
 Minimizing this term encourages compact, structured latent codes. If rate is too high, the model can memorize observations instead of learning stable dynamics. The $D_0$ constraint keeps reconstruction quality acceptable while rate is pushed down.
-
-So CO minimizes rate (KL divergence) under a reconstruction constraint, which is the key balance for learning useful system dynamics.
 
 **How It Works in Practice:**
 
@@ -540,20 +538,7 @@ The formulas to remember are:
 - $p_{\psi_0}(z_1) = \int p_{\psi_0}(z_1 \mid \zeta)p(\zeta)\,d\zeta$ is the hierarchical prior used to approximate that target.
 - $q_{\phi_0}(\zeta \mid z_1)$ is the variational posterior used to learn the hierarchical prior.
 
-What these formulas mean together:
-
-- the standard normal prior is too simple for realistic initial states;
-- the empirical Bayes target says the prior should match the data-driven posterior initial states;
-- the hierarchical prior gives a practical way to learn that richer prior;
-- the variational posterior makes the learning tractable.
-
-The important points are:
-
-- A poor prior on $z_1$ can over-regularise the latent space and weaken the transition model.
-- If the prior does not match the data-driven initial states, the generative model may start from unrealistic latent values.
-- The paper therefore uses an empirical Bayes view: the best prior should match the average posterior initial state across the dataset.
-- A hierarchical prior is used as a practical way to approximate that better prior.
-- The variational form makes this tractable and fits the same rate-distortion logic as the rest of the paper.
+Together, these equations say: the standard normal prior is often too simple; the empirical Bayes target gives a data-matched prior; and the hierarchical prior plus variational posterior is the tractable way to learn that richer shape in practice.
 
 Why the initial prior matters so much:
 
@@ -570,25 +555,13 @@ The solution is to learn the prior from the data itself. The empirical Bayes tar
 
 Connection to rate-distortion:
 
-In the CO framework, the trade-off is between rate (KL) and distortion (reconstruction). A better prior on $z_1$ directly reduces the rate term without sacrificing distortion. This is why learning the initial distribution is not a separate concern—it is an integral part of the CO strategy. By reducing unnecessary KL, you free up capacity for the model to learn better dynamics without overfitting.
-
-Why a hierarchical prior is needed:
-
-The empirical Bayes target is ideal but not directly learnable because it requires averaging over the entire dataset during training. The hierarchical prior $p_{\psi_0}(z_1) = \int p_{\psi_0}(z_1 \mid \zeta)p(\zeta)\,d\zeta$ is the practical solution:
+In the CO framework, the trade-off is between rate (KL) and distortion (reconstruction). A better prior on $z_1$ directly reduces the rate term without sacrificing distortion. The empirical Bayes target is ideal but not directly learnable during minibatch training, so the hierarchical prior is used as the practical approximation:
 
 - The latent variable $\zeta$ acts as a "hyper-parameter" for the $z_1$ distribution.
 - Marginalizing over $\zeta$ gives a more flexible family of distributions than a simple Gaussian.
 - The variational posterior $q_{\phi_0}(\zeta \mid z_1)$ lets you fit this richer prior to match the empirical distribution across your data.
 
-This two-level structure allows the learning algorithm to approximate the empirical Bayes target without needing to compute the full expectation during each training step.
-
-What to remember:
-
-- $z_1$ is not just a technical starting point; it affects the whole sequence.
-- A poor prior forces the model to choose between accepting high KL penalties or weakening the latent representation.
-- Learning the initial prior makes the KL term more meaningful and reduces unnecessary pressure on the latent representation.
-- A better prior on $z_1$ directly supports the CO objective by freeing up rate capacity for better reconstruction and dynamics.
-- This is why the section belongs with the VHP discussion: both are about making the prior more realistic so dynamics learning is easier.
+This two-level structure approximates the empirical Bayes target without computing a full-dataset expectation at every step.
 
 ### Evaluation Metrics
 
