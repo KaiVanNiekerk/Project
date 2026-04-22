@@ -12,7 +12,7 @@ Core questions:
 
 - When does EKVAE outperform related sequential latent-variable models?
 - Does constrained optimisation improve system identification compared with standard ELBO training?
-- How stable are the gains when we move from short, structured sequences to noisier or longer-horizon data?
+- How stable are the gains when we move from short, structured sequences to noisier or longer-horizon data or even multi-modal data?
 - Which parts matter most: the latent dynamics, the inference method, or the prior structure?
 
 ## 2. Motivation
@@ -150,7 +150,7 @@ Datasets and strategy:
 
 The paper datasets are useful for validation because they are controlled and interpretable. We target trend-level agreement and main effect reproduction rather than exact numeric match. The first phase focuses on paper-faithful reproduction with these benchmarks (pendulum images at 16x16 with sequence length 15, reacher angles with sequence length 30, and reacher RGB at 64x64 with sequence length 30).
 
-Harder, longer, or noisier datasets are later stress tests of generalization. If the source experiments used short sequences, they represent a limited rather than general test of the method. We prefer longer sequences or noisier real-world series as later validation checks, and treat finance or similar datasets as robustness tests rather than primary benchmarks.
+Harder, longer, multimodal or noisier datasets are later stress tests of generalization. If the source experiments used short unimodal sequences, they represent a limited rather than general test of the method. We prefer longer sequences or noisier real-world series as later validation checks, and treat finance or similar datasets as robustness tests rather than primary benchmarks.
 
 Time and resource constraints may require prioritizing EKVAE with the strongest baselines first, expanding only if paper results are stable and interpretable.
 
