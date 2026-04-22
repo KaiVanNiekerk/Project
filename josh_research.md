@@ -43,5 +43,20 @@ Ambiguous observations are the clearest case. Imagine a robot arm that looks ide
 Switching dynamics are another major case. If a system can be in one of several qualitatively different regimes — a pendulum that might be swinging clockwise or counterclockwise, a physical system with multiple attractors, a process that transitions between fast and slow dynamics — then at transition points the posterior over which regime you're in becomes multimodal.
 Partial observability with symmetry is closely related. When you can only observe part of the system state and the unobserved part has multiple plausible values consistent with what you can see, the posterior over the full state inherits that multimodality.
 
+#### Why the paper does not address this
+It is worth noting that the pendulum dataset used in the paper is specifically chosen to avoid the multimodal problem. A single frame resolves the angle, and two consecutive frames resolve the direction of motion — so the posterior becomes unimodal within just a couple of observations. The dynamics are also smooth and continuous with no regime switches or multiple attractors. The paper acknowledges the unimodal limitation briefly in response to reviewers but does not test against it, as doing so would likely show the EKVAE performing poorly. This is an open gap that our project could directly address — constructing a system with known multimodality and empirically mapping out where the EKVAE breaks down compared to a standard deep generative model.
+
 # When Would an EKVAE be best?
 the EKVAE sits in a specific niche where the system dynamics are approximately Markovian, the posterior is approximately unimodal (or can be made so with a good enough observation model), and you need interpretable states and principled uncertainty. Outside that niche — particularly with multimodal posteriors or strongly non-Gaussian noise — you're either forced to use approximations that degrade performance, or you need a fundamentally different approach like particle filters, mixture models in latent space, or normalising flows for the posterior.
+
+# For proposal questions
+Should we talk about why EKVAEs even exist or why they would work on soemthing like pendulumn data.
+## 3.2
+Shorten this section?
+## 3.3
+Should we mention why we combine KF with VAEs
+neural linearisation in more depth?
+## 3.4
+Make sure my understanding of how the objective function works is correct.
+## 4
+Should we mention that we arfe not doign annealing?
