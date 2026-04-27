@@ -61,7 +61,9 @@ So the background section is really establishing the core trade-off of the whole
 The ELBO is the core objective function in variational inference. It provides a lower bound on the log-likelihood of the data, which we maximize during training instead of directly maximizing the intractable likelihood.
 
 **Formula:**
-$$\text{ELBO} = \mathbb{E}_{q(z|x)}[\log p(x|z)] - \text{KL}(q(z|x) \| p(z))$$
+$$
+   ext{ELBO} = \mathbb{E}_{q(z|x)}[\log p(x|z)] - \text{KL}(q(z|x) \| p(z))
+$$
 
 What this means:
 
@@ -91,18 +93,24 @@ The constrained optimization (CO) framework modifies this standard ELBO by intro
 A DSSM is a neural generative model for sequences that combines a Markov state-space structure with deep neural networks for the dynamics and observation process.
 
 **Structure:**
-A DSSM has two key parts:
+ A DSSM has two key parts:
 
 1. **State transition model (dynamics):**
-   $$z_t \sim p(z_t | z_{t-1})$$
+   $$
+   z_t \sim p(z_t | z_{t-1})
+   $$
    This describes how the hidden state evolves over time. It takes the previous state $z_{t-1}$ and generates the next state $z_t$. For EKVAE, this uses a neural network parameterized by $\theta$.
 
 2. **Observation model (decoder):**
-   $$x_t \sim p(x_t | z_t)$$
+   $$
+   x_t \sim p(x_t | z_t)
+   $$
    This describes how observations are generated from the current state. It takes the state $z_t$ and generates the observation $x_t$. In practice, this is often a Gaussian with mean and variance predicted by a neural network.
 
 **Joint Model:**
-$$p(x_{1:T}, z_{1:T}) = p(z_1) \prod_{t=2}^{T} p(z_t | z_{t-1}) \prod_{t=1}^{T} p(x_t | z_t)$$
+$$
+p(x_{1:T}, z_{1:T}) = p(z_1) \prod_{t=2}^{T} p(z_t | z_{t-1}) \prod_{t=1}^{T} p(x_t | z_t)
+$$
 
 This factorization says: the full sequence likelihood breaks down into a prior on the initial state, a product of transition probabilities, and a product of observation probabilities.
 
@@ -121,7 +129,9 @@ What this means:
 
 **Inference in DSSM:**
 During inference, we need to estimate the state sequence $z_{1:T}$ given observations $x_{1:T}$. The posterior is:
-$$q(z_{1:T} | x_{1:T}) = q(z_1 | x_{1:T}) \prod_{t=2}^{T} q(z_t | z_{t-1}, x_{1:T})$$
+$$
+q(z_{1:T} | x_{1:T}) = q(z_1 | x_{1:T}) \prod_{t=2}^{T} q(z_t | z_{t-1}, x_{1:T})
+$$
 
 This is tractable only under certain assumptions (like linearity or Gaussian transitions), which is where the Kalman filter/smoother comes in for the standard KVAE, and the Extended Kalman Filter for EKVAE.
 
@@ -137,7 +147,9 @@ Constrained Optimization is a version of ELBO training that puts an explicit lim
 
 **Problem with Standard ELBO Training:**
 In weighted ELBO training, we optimize:
-$$\text{ELBO} = \mathbb{E}_{q(z|x)}[\log p(x|z)] - \beta \cdot \text{KL}(q(z|x) \| p(z))$$
+$$
+	ext{ELBO} = \mathbb{E}_{q(z|x)}[\log p(x|z)] - \beta \cdot \text{KL}(q(z|x) \| p(z))
+$$
 
 What this means:
 
@@ -154,16 +166,22 @@ The weight $\beta$ controls the trade-off, but:
 **CO Solution:**
 Instead of balancing with a weight, CO enforces a hard constraint:
 
-$$\max_{q, p} \mathbb{E}_{q(z|x)}[\log p(x|z)] \quad \text{subject to} \quad \text{KL}(q(z|x) \| p(z)) \leq D_0$$
+$$
+\max_{q, p} \mathbb{E}_{q(z|x)}[\log p(x|z)] \quad \text{subject to} \quad \text{KL}(q(z|x) \| p(z)) \leq D_0
+$$
 
 This is solved using the Lagrangian formulation:
-$$\mathcal{L} = \mathbb{E}_{q(z|x)}[\log p(x|z)] - \lambda \cdot (\text{KL}(q(z|x) \| p(z)) - D_0)$$
+$$
+\mathcal{L} = \mathbb{E}_{q(z|x)}[\log p(x|z)] - \lambda \cdot (\text{KL}(q(z|x) \| p(z)) - D_0)
+$$
 
 where $\lambda$ is a Lagrange multiplier updated during training.
 
 **Connection to the ELBO:**
 Recall that the ELBO splits into two terms: $\mathbb{E}_{q(z|x)}[\log p(x|z)] - \text{KL}(q(z|x) \| p(z))$. In the CO Lagrangian above, if we rearrange and expand, we recover exactly these terms:
-$$\mathcal{L} = \mathbb{E}_{q(z|x)}[\log p(x|z)] - \lambda \cdot \text{KL}(q(z|x) \| p(z)) + \text{constant}$$
+$$
+\mathcal{L} = \mathbb{E}_{q(z|x)}[\log p(x|z)] - \lambda \cdot \text{KL}(q(z|x) \| p(z)) + \text{constant}
+$$
 
 The first term $\mathbb{E}_{q(z|x)}[\log p(x|z)]$ is reconstruction (distortion), and the second term $\text{KL}(q(z|x) \| p(z))$ is rate. The multiplier $\lambda$ acts like a learned $\beta$ that adjusts during training, rather than being hand-chosen, to keep the rate near the target $D_0$.
 
@@ -451,26 +469,16 @@ What this means:
 - $g_\phi$ is the observation or decoder model.
 - It turns the hidden state into the visible observation.
 - $\eta_t$ represents observation noise.
-
 **How the Extended Kalman Part Works:**
-Because the transition is nonlinear, EKVAE cannot use a standard linear Kalman update directly. In the paper and OpenReview discussion, this is handled with a learned locally linear transition matrix $F_t$ (a surrogate for local linearisation), rather than explicitly computing a first-order Taylor Jacobian at each step.
+EKVAE handles nonlinear transitions by using a learned, time-dependent local linearization. At each step the model emits a matrix $F_t$ that serves as a surrogate Jacobian for the transition map around the current latent state; this surrogate enables Kalman-style prediction and update for nonlinear dynamics.
 
-What this means:
+Key points:
 
-- $F_t$ is the local linear approximation of the dynamics.
-- In practice, $F_t$ is learned to support filtering/smoothing and prediction, not guaranteed to be the exact analytic Jacobian of the true system.
-- EKVAE uses this local slope to perform the Kalman-style update.
+- $F_t$ is a task-driven, learned approximation (a surrogate Jacobian), not necessarily the exact analytic Taylor Jacobian of the true system.
+- The EKF-style prediction and correction use $F_t$; its fidelity directly affects filtering and smoothing accuracy.
+- Because $F_t$ is learned jointly with dynamics and inference networks, linearization errors can occur. If you intend to claim recovery of true system derivatives, include diagnostics (finite-difference Jacobian checks, prediction residual analysis, or sensitivity tests) comparing learned $F_t$ to numerical Jacobians.
 
-This learned linearisation is used to predict and correct the latent state.
-
-**Side note (practical takeaway):** OpenReview discussion suggests we should treat EKVAE's $F_t$ as a learned, task-useful local linearisation rather than a guaranteed true Taylor Jacobian. For our project, this means we should report prediction/system-ID quality as the main evidence, and avoid claiming exact physical Jacobian recovery unless we run extra diagnostics.
-
-At a high level, the EKF step does two things:
-
-1. **Prediction:** use the learned dynamics model to predict the next latent state.
-2. **Update:** use the new observation to correct that prediction.
-
-This is what lets EKVAE keep the sequential structure of a state-space model while still handling nonlinear dynamics.
+Practical takeaway: treat $F_t$ as an inference-friendly surrogate and report predictive/system-ID performance as the primary evidence; include explicit validation when making claims about physical Jacobians.
 
 **Why EKVAE Matters for This Project:**
 It is where ELBO, DSSM, CO, and VHP come together, so it is the main model we want to test and reproduce.
