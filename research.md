@@ -176,7 +176,7 @@ What this means:
 **Why the Term Order Is Reversed:**
 Notice that the ELBO puts reconstruction first: $\text{ELBO} = \text{distortion} - \text{rate}$, while the CO Lagrangian puts rate first: $\mathcal{L} = \text{rate} + \lambda(\text{distortion} - D_0)$. This is not accidental—it reflects a fundamental shift in perspective.
 
-In the ELBO, we **maximize** the objective, trying to push both distortion up and rate down simultaneously with a fixed weight. In the constrained form, we **minimize** the rate as the primary goal, with distortion kept below a hard threshold. The rate term appears first because it is now the main objective being minimized, not a penalty on a balanced trade-off. The distortion term with the multiplier $\lambda$ is the constraint enforcer—it acts as a penalty that increases if distortion rises above $D_0$, pushing back on the rate minimization to maintain reconstruction quality. So you have switched from "balance reconstruction vs compression" to "compress as much as possible while guaranteeing acceptable reconstruction."
+In the ELBO, we **maximize** a weighted trade-off. In the constrained form, we **minimize** rate while keeping distortion under a threshold, so the constrained quantity moves inside the multiplier term. This is the same objective/constraint flip summarized later in the "Constraint Flip" subsection.
 
 **Why Minimize Rate at All:**
 
@@ -189,10 +189,7 @@ Minimizing this term encourages compact, structured latent codes. If rate is too
 
 **How It Works in Practice:**
 
-1. Set a target rate threshold $D_0$.
-2. Adjust $\lambda$ during training so the KL stays near that target.
-3. Increase the penalty if KL rises too high.
-4. Relax it if KL stays too low.
+In practice, this is implemented with a primal-dual update: model parameters optimize the Lagrangian while $\lambda$ is adapted to keep the chosen constraint near its threshold. The concrete update rule is given in the optimization subsection below.
 
 **Why CO Is Useful:**
 
@@ -232,8 +229,7 @@ So if your data has multimodal posteriors, CO will not fix that problem. It may 
 
 **Toy-Data / Short-Sequence Caveat:**
 
-- CO may look especially stable on short or simple sequences, because the latent budget is easier to manage.
-- On longer sequences, the same $D_0$ may behave differently, so tuning expectations should stay realistic.
+- See the main caveat in `Review Takeaways`. The same short-sequence concern applies here when interpreting CO gains.
 
 **Why This Matters in the Paper:**
 Section 3 makes one main point: a high ELBO does not automatically mean the model has learned real dynamics. CO addresses this by keeping rate small while requiring distortion to stay below $D_0$. The optimization rule below implements that idea directly.
@@ -258,6 +254,60 @@ Conversely, CO is likely to struggle or provide less benefit on:
 - Sparse or highly corrupted observations.
 
 On such data, the bottleneck is representational (unimodal inference), not just rate tuning, so CO alone cannot fix it.
+
+### Constraint Flip: Rate-Constrained vs Distortion-Constrained
+
+This project note uses both constrained forms in different places. They are related, but the constrained quantity and optimization priority are flipped.
+
+**A) Rate-Constrained Form (as introduced earlier):**
+
+$$
+\max_{\theta,\phi}\; D(\theta,\phi)
+\quad \text{subject to} \quad
+R(\phi) \le R_0
+$$
+
+with Lagrangian
+
+$$
+\mathcal{L}_{\text{rate-const}} = D(\theta,\phi) - \lambda\big(R(\phi)-R_0\big).
+$$
+
+Interpretation: maximize reconstruction quality while enforcing an information budget.
+
+**B) Distortion-Constrained Form (used in the optimization subsection):**
+
+$$
+\min_{\theta,\psi,\phi}\; R(\psi,\phi)
+\quad \text{subject to} \quad
+D(\theta,\phi) \le D_0
+$$
+
+with Lagrangian
+
+$$
+\mathcal{L}_{\text{dist-const}} = R(\psi,\phi) + \lambda\big(D(\theta,\phi)-D_0\big).
+$$
+
+Interpretation: minimize latent information usage while enforcing a reconstruction-quality floor.
+
+**How to Identify the Flip in Formulae:**
+
+- The unconstrained objective is the term outside the multiplier and appears first in the Lagrangian.
+- The constrained quantity appears inside $\lambda(\cdot - \text{threshold})$.
+- If the constraint is $R \le R_0$, you are in rate-constrained mode.
+- If the constraint is $D \le D_0$, you are in distortion-constrained mode.
+
+Both are valid rate-distortion formulations; they just choose opposite sides as the primary optimization target.
+
+**Why This Flip Occurs and Why It Matters:**
+
+The flip occurs because constrained optimization lets you choose either side of the rate-distortion trade-off as the primary objective and place the other side as a hard feasibility condition. Mathematically, this is a primal-design choice: optimize $D$ under a rate budget, or optimize $R$ under a distortion budget. The Lagrangian then reflects that choice automatically, with the constrained term appearing inside the multiplier.
+
+This matters because it changes what training guarantees and how results should be interpreted. In rate-constrained form, the guarantee is bounded information usage, so reconstruction gains are read as "best quality under a fixed code budget." In distortion-constrained form, the guarantee is bounded reconstruction error, so compression gains are read as "smallest code that still meets quality." For this project, that distinction affects threshold selection ($R_0$ vs $D_0$), failure diagnosis (constraint violation indicates different bottlenecks), and fair comparison across stages.
+
+**Short note on the apparent paper switch:**
+If the paper first writes a distortion-constrained objective and later discusses a rate-constrained one, this is usually a change in parameterization and emphasis, not a contradiction. The authors are describing the same rate-distortion trade-off from two sides: one form fixes quality and optimizes compression, while the other fixes compression budget and discusses achievable quality.
 
 ### Optimization Algorithm for CO
 
@@ -444,8 +494,7 @@ We do not need every proof; we need the latent transition, observation model, an
 
 **Toy-Data / Short-Sequence Caveat:**
 
-- EKVAE can look strong on short toy sequences because the nonlinear dynamics are easier to track.
-- Longer sequences or noisier datasets may expose filtering errors more clearly, so we should expect performance to drop if the paper mostly used short horizons.
+- See the main caveat in `Review Takeaways`. The same short-sequence concern applies when assessing EKVAE robustness.
 
 ### Variational Hierarchical Prior (VHP)
 
@@ -524,8 +573,7 @@ It lets us test whether the richer prior improves prediction or system identific
 
 **Toy-Data / Short-Sequence Caveat:**
 
-- A richer prior can look helpful on small toy data but add less value on larger datasets if the extra complexity is not needed.
-- If the source paper relied on short sequences, VHP may be over-credited relative to how it would behave on longer time horizons.
+- See the main caveat in `Review Takeaways`. The same short-sequence concern applies when attributing gains to VHP.
 
 ### Learning the Initial Distribution
 
@@ -540,7 +588,7 @@ The formulas to remember are:
 
 Together, these equations say: the standard normal prior is often too simple; the empirical Bayes target gives a data-matched prior; and the hierarchical prior plus variational posterior is the tractable way to learn that richer shape in practice.
 
-Why the initial prior matters so much:
+**Why This Matters:**
 
 The key insight is that $z_1$ is not just a starting point—it affects the entire sequence because each $z_t$ depends on $z_{t-1}$. If you start with an unrealistic prior for $z_1$, the model has to fight to explain the data from an incorrect starting position. This wastes capacity in the latent representation.
 
@@ -553,7 +601,7 @@ Either way, a poor prior on $z_1$ undermines what the model is trying to learn.
 
 The solution is to learn the prior from the data itself. The empirical Bayes target $p^*(z_1) = \mathbb{E}_{p_D}[q_\phi(z_1 \mid x, u)]$ says: look at what the inference network learns as the initial state across your entire dataset, and use that as your prior. This way, the prior and the inferred initial states are naturally aligned, the KL term is reduced, and the model has more capacity to capture both reconstruction quality and meaningful dynamics.
 
-Connection to rate-distortion:
+**Practical Consequence for This Project:**
 
 In the CO framework, the trade-off is between rate (KL) and distortion (reconstruction). A better prior on $z_1$ directly reduces the rate term without sacrificing distortion. The empirical Bayes target is ideal but not directly learnable during minibatch training, so the hierarchical prior is used as the practical approximation:
 
@@ -595,6 +643,8 @@ What this means:
 - The denominator measures the total variation in the true values.
 
 An $R^2$ value near 1 means the latent variables explain the target state well. A value near 0 means the model is doing about as well as just predicting the mean. Negative values mean the model is doing worse than that simple baseline.
+
+These metrics close the method section and define how we will judge each stage in the comparison. The next section translates this into concrete scope decisions for execution.
 
 ## Scope Plan
 
