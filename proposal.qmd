@@ -1,0 +1,53 @@
+---
+title: "My Title"
+author:
+  - "Name1 (Student #1)"
+  - "Name2 (Student #2)"
+  - "Supervisor: Jake Stangroom"
+date: today
+format:
+  pdf:
+    documentclass: article
+    classoption: twocolumn
+    fontsize: 11pt
+    geometry: margin=1in
+    number-sections: true
+abstract: "We implement ..."
+---
+
+# Hypotheses
+
+- **Primary Hypothesis:** ...
+- **Secondary Hypothesis:** ...
+
+# Literature Review
+
+Text here. You can cite with [@bailey2014] if using a `.bib` file.
+
+# Aims and Objectives
+
+1. First item
+2. Second item
+    - Sub item
+    - Sub item
+
+# Data Requirements Specification
+
+- Daily data of all BRICs...
+- Intraday data from the JSE
+
+# Systems Requirements Specification
+
+- Hardware requirements
+- Software: R, Python
+
+# Project Milestone Deliverables
+
+| Date     | Description       | Deliverable |
+|----------|-------------------|-------------|
+| 1 Sep 25 | Start             | Proposal    |
+| 31 Dec 25| This is the end   | The End     |
+
+: Key dates and deliverables {#tbl-milestones}
+
+# References
