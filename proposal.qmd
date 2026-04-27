@@ -8,7 +8,6 @@ date: today
 format:
   pdf:
     documentclass: article
-    classoption: twocolumn
     fontsize: 11pt
     geometry: margin=1in
     number-sections: true
