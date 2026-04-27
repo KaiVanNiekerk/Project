@@ -1,52 +1,81 @@
 ---
-title: "My Title"
+title: "EKVAE Project Proposal"
 author:
-  - "Name1 (Student #1)"
-  - "Name2 (Student #2)"
+  - "Kai Van Niekerk (VNKKAI001)"
+  - "Joshua Orelowitz (ORLJOS001)"
   - "Supervisor: Jake Stangroom"
 date: today
 format:
   pdf:
     documentclass: article
+    classoption: twocolumn
     fontsize: 11pt
     geometry: margin=1in
     number-sections: true
 abstract: "We implement ..."
 ---
 
+# Problem Statement
+
+Many real systems are only partially observed: we see noisy signals but not the underlying latent state that drives system behaviour. Existing sequence models often optimize short-horizon reconstruction quality, yet this does not guarantee accurate latent dynamics or stable long-horizon forecasting. The central problem is to learn nonlinear hidden-state dynamics from partial observations in a way that remains interpretable, uncertainty-aware, and robust beyond controlled toy settings.
+
 # Hypotheses
 
-- **Primary Hypothesis:** ...
-- **Secondary Hypothesis:** ...
+- **Primary Hypothesis:** EKVAE will outperform related sequential latent-variable baselines on latent dynamics recovery and forecasting under partial observability.
+- **Secondary Hypothesis 1:** Constrained optimization will improve system identification compared with standard ELBO-based training.
+- **Secondary Hypothesis 2:** Performance gains observed on short, structured benchmark sequences will weaken on longer or noisier datasets, but EKVAE will retain trend-level advantages when uncertainty is modeled effectively.
+- **Secondary Hypothesis 3:** EKVAE will outperform KVAE-style baselines when latent-state Markov consistency is critical for accurate dynamics recovery.
+- **Secondary Hypothesis 4:** EKVAE performance will degrade under strongly multimodal posterior conditions, with larger failures in ambiguous or regime-switching settings.
+
+# Aims
+
+To study how nonlinear dynamical systems can be learned from partial observations using deep state-space models, with EKVAE as the primary method, and to evaluate whether its advantages hold beyond paper-benchmark conditions.
+
+# Objectives
+
+1. Reproduce the central findings of the EKVAE paper on its benchmark settings, targeting trend-level agreement rather than exact numeric replication.
+2. Compare EKVAE against selected DSSM and Kalman-family baselines on prediction quality and latent-state identifiability.
+3. Evaluate whether constrained optimization improves latent dynamics learning relative to standard ELBO training.
+4. Test robustness on harder, longer, or noisier sequences as stress tests of generalization.
+5. Analyse which components drive performance differences, including latent transition structure, inference method, and prior design.
+6. Run staged component comparisons (ELBO, CO, EKVAE, VHP) to isolate where performance gains originate.
 
 # Literature Review
 
 Text here. You can cite with [@bailey2014] if using a `.bib` file.
 
-# Aims and Objectives
+# Methodology and Analysis
 
-1. First item
-2. Second item
-    - Sub item
-    - Sub item
-
-# Data Requirements Specification
-
-- Daily data of all BRICs...
-- Intraday data from the JSE
-
-# Systems Requirements Specification
-
-- Hardware requirements
-- Software: R, Python
+- **Repository and Collaboration:** We will use a shared Git repository for source code, experiment configuration, documentation, and idea/research notes so the full project process is versioned and reproducible.
+- **Implementation Stack (Python):**
+  - **Core modeling and training:** `torch` (PyTorch) for ELBO/CO/EKVAE/VHP model implementation, optimization, and gradient-based training.
+  - **Numerical and probabilistic computation:** `numpy` and `scipy` for matrix/state-transition operations, Gaussian and linear-algebra routines, and supporting filtering/state-space analysis.
+  - **Data handling and experiment tracking:** `pandas` for dataset preprocessing, run logs, and structured results tables.
+  - **Visualization and evaluation:** `matplotlib` and `seaborn` for convergence/rollout/comparison plots, and `scikit-learn` for evaluation utilities such as $R^2$.
+- **Datasets:** We will use the same benchmark datasets reported in the original paper for faithful comparison: pendulum images (16x16, sequence length 15), reacher angles (sequence length 30), and reacher RGB observations (64x64, sequence length 30).
+- **Experimental Structure:** We will run staged model comparisons (ELBO baseline, +CO, +EKVAE, +VHP) under fixed configuration and seeds for fair component-level analysis.
+- **Primary Quantitative Metrics:**
+  - Mean Squared Error (MSE) for prediction/rollout accuracy.
+  - Coefficient of determination ($R^2$) for latent-state identifiability where ground truth state targets are available.
+- **Paper-Aligned Plots for Analysis and Convergence Checks:**
+  - Training objective convergence curves across epochs/updates (including distortion-rate and total objective behaviour).
+  - Trajectory/rollout comparison plots (ground truth vs predicted sequence behaviour).
+  - Latent-state quality visualisations used for model-comparison interpretation in the paper's evaluation style.
 
 # Project Milestone Deliverables
 
-| Date     | Description       | Deliverable |
-|----------|-------------------|-------------|
-| 1 Sep 25 | Start             | Proposal    |
-| 31 Dec 25| This is the end   | The End     |
-
-: Key dates and deliverables {#tbl-milestones}
+\begin{table*}[t]
+\centering
+\begin{tabular}{lll}
+\hline
+Date & Description & Deliverable \\
+\hline
+1 Sep 25 & Start & Proposal \\
+31 Dec 25 & This is the end & The End \\
+\hline
+\end{tabular}
+\caption{Key dates and deliverables}
+\label{tbl-milestones}
+\end{table*}
 
 # References
