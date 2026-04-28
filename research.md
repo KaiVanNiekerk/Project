@@ -480,6 +480,81 @@ Key points:
 
 Practical takeaway: treat $F_t$ as an inference-friendly surrogate and report predictive/system-ID performance as the primary evidence; include explicit validation when making claims about physical Jacobians.
 
+#### Neural Linearisation via Basis Mixing
+
+**What It Is:**
+Rather than computing the true (unknown) Jacobian of the transition function, EKVAE learns a state- and input-dependent linear approximation at each step. The model maintains a small set of learned basis matrices and learns a gating function that blends them based on context. This learned linearisation is globally optimised for the filtering task, not just a local Taylor approximation.
+
+**The Formulae:**
+
+Local-linear Gaussian transition:
+$$
+p_\psi(z_{t+1}|z_t,u_t) = \mathcal{N}\left(z_{t+1}\;\middle|\;F_\psi(z_t,u_t)\,z_t + B_\psi(z_t,u_t)\,u_t,\;Q_\psi(z_t,u_t)\right)
+$$
+
+Basis-mixing parameterisation:
+$$
+F_\psi(z_t,u_t) = \sum_{m=1}^{M} \alpha_\psi^{(m)}(z_t,u_t)\,F^{(m)},\quad\text{where}\quad \alpha_\psi(z_t,u_t) = \mathrm{softmax}\big(g_\psi(z_t,u_t)\big) \in \mathbb{R}^M
+$$
+
+What this means:
+
+- The model maintains $M$ learned **basis matrices** $\{F^{(m)}, B^{(m)}, Q^{(m)}\}_{m=1}^M$.
+- A neural network $g_\psi(z_t,u_t)$ outputs gating logits; softmax produces weights $\alpha_\psi^{(m)} \in [0,1]$ that sum to 1.
+- At each step, the actual Jacobian approximation is a convex combination: $F_\psi = \sum_m \alpha^{(m)} F^{(m)}$.
+- The conditional mean is affine in state and control, but the matrices depend on context, so globally the system remains nonlinear.
+
+**Why This Approach:**
+
+Standard EKF computes the Jacobian via first-order Taylor expansion of the unknown true transition $f(z_t, u_t)$. Limitations:
+
+- Computationally expensive (requires autodiff through unknown $f$).
+- Local approximation; errors accumulate over horizons.
+- Unknown dynamics are learned jointly; true Jacobian is unavailable during training.
+
+Neural linearisation instead **learns the best context-dependent linear approximation for the full training task**. The learned $F_\psi(z_t,u_t)$ is optimised end-to-end to minimise ELBO/CO loss, not just to match a local Taylor expansion. 
+
+**Why basis mixing instead of direct matrix output:**
+
+The model could in principle output an arbitrary $d_z \times d_z$ matrix at each step via a dense neural network, but this has drawbacks:
+- **Parameter explosion:** dense matrix output requires many parameters (risk of overfitting).
+- **Poor generalisation:** learned per-step matrices may be trajectory-dependent, not reusable across different trajectories.
+
+Basis mixing solves this by maintaining $M$ fixed learned basis matrices and a small **gating network** $g_\psi$ (a lightweight MLP: typically 1–2 hidden layers that map $(z_t, u_t) \to \mathbb{R}^M$). This achieves parameter efficiency while allowing context-adaptive blending. The bases learn to represent $M$ "essential dynamical modes," and the gating network learns when to activate them. This implicit competition among bases discourages overfitting and encourages discovering meaningful, reusable patterns.
+
+**How It Is Used in EKVAE:**
+
+In the Kalman predict step:
+$$
+\hat{z}_{t+1|t} = F_\psi(z_t,u_t)\,\hat{z}_{t|t} + B_\psi(z_t,u_t)\,u_t,\quad P_{t+1|t} = F_\psi(z_t,u_t)\,P_{t|t}\,F_\psi(z_t,u_t)^\top + Q_\psi(z_t,u_t)
+$$
+
+The learned matrices are substituted for the true Jacobian; gradients flow backward through the bases and gating network during training.
+
+**Key Drawbacks and Mitigations:**
+
+1. **Learned linearisation ≠ true Jacobian:** The model is optimised for predictive/ELBO performance, not system derivative recovery. Validate with finite-difference Jacobian checks on test data; report relative error if claiming derivative recovery.
+
+2. **Gating collapse:** The softmax weights $\alpha_\psi$ may collapse to a single basis, wasting capacity and defeating context-adaptive blending. Symptoms: gating entropy (Shannon entropy of $\alpha$) approaches zero; one basis always has weight $\approx 1$. Mitigations: add entropy regularisation to the loss:
+   $$
+   \text{Loss}_{\text{total}} = \text{ELBO/CO loss} - \lambda_{\text{ent}} \sum_t H(\alpha_\psi(z_t,u_t))
+   $$
+   where $H(\alpha) = -\sum_m \alpha^{(m)} \log(\alpha^{(m)} + \epsilon)$ is Shannon entropy (maximize entropy to keep weights spread); also use temperature annealing on the softmax (start with high temperature, cool over training) and L2 regularisation on basis norms to prevent one basis from dominating.
+
+3. **Approximation error accumulation:** One-step predictions may be accurate, but errors compound over longer horizons. Separate one-step vs multi-step evaluation; use Mahalanobis residuals to check if learned $Q_\psi$ matches prediction errors.
+
+4. **Positive definiteness of $Q_\psi$:** Parametrise via Cholesky decomposition: $Q_\psi = L_\psi L_\psi^\top + \epsilon I$. Enforce minimum eigenvalue; monitor condition numbers.
+
+5. **Overfitting on small datasets:** Learning $M$ basis matrices + gating network adds many parameters. Use L2 regularisation on bases, early stopping on validation loss, and ablation studies (e.g., vary $M$).
+
+**Practical Checklist:**
+
+- Choose $M$ (number of bases) pragmatically: start with $M \in [3, 5]$; too small ($M=1$) removes context-adaptation; too large risks overfitting without commensurate performance gain.
+- Train with entropy regularisation on gating softmax; monitor gating entropy at each epoch (alert if $< 0.5$ on a scale of $0$ to $\log M$).
+- Compute one-step and multi-step prediction MSE separately.
+- Run finite-difference Jacobian validation on held-out test subset; report relative error.
+- Use L2 regularisation on basis matrices.
+
 **Why EKVAE Matters for This Project:**
 It is where ELBO, DSSM, CO, and VHP come together, so it is the main model we want to test and reproduce.
 
