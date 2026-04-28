@@ -5,6 +5,7 @@ author:
   - "Joshua Orelowitz (ORLJOS001)"
   - "Supervisor: Jake Stangroom"
 date: today
+bibliography: references.bib
 format:
   pdf:
     documentclass: article
@@ -46,7 +47,8 @@ The aim is to evaluate how effectively deep state-space models learn nonlinear d
 
 # Literature Review
 
-Text here. You can cite with [@bailey2014] if using a `.bib` file.
+The following review traces the key developments underpinning the Extended Kalman Variational Autoencoder (EKVAE). Beginning with variational autoencoders and Kalman filtering as independent foundations, it examines how their combination, along with a constrained optimisation training framework, addresses the limitations of standard deep state-space models. This establishes the context in which @klushyn2021latent is situated and motivates the extended evaluation of the EKVAE on more challenging data that this project proposes.
+
 
 # Methodology and Analysis
 
