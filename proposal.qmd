@@ -49,6 +49,15 @@ The aim is to evaluate how effectively deep state-space models learn nonlinear d
 
 The following review traces the key developments underpinning the Extended Kalman Variational Autoencoder (EKVAE). Beginning with variational autoencoders and Kalman filtering as independent foundations, it examines how their combination, along with a constrained optimisation training framework, addresses the limitations of standard deep state-space models. This establishes the context in which @klushyn2021latent is situated and motivates the extended evaluation of the EKVAE on more challenging data that this project proposes.
 
+Autoencoders (AEs) were popularised as a method for nonlinear dimensionality reduction by @hinton2006reducing. They use an encoder-decoder architecture, where the encoder maps high-dimensional inputs to a low-dimensional latent space and the decoder attempts to reconstruct the original data from that compressed representation. By forcing information through a bottleneck and training via backpropagation, the model learns to retain only the most important features in the latent space. However, this latent space is unstructured, there is no guarantee that it is continuous and thus that samples drawn from it will be meaningful [@kingma2014vae].
+@kingma2014vae addressed this by introducing the Variational Autoencoder (VAE), imposing a probabilistic structure on the latent space. Rather than encoding an input to a single point, the encoder outputs a distribution over the latent space from which a sample is drawn for decoding. This encourages the latent space to be ordered and continuous, enabling meaningful samples to be generated. Training is performed by maximising the Evidence Lower Bound (ELBO), which balances reconstruction quality against how closely the approximate posterior matches a prior distribution, typically a standard Gaussian [@kingma2014vae].
+
+The Kalman Filter (KF), introduced by @kalman1960new, provides an optimal method for estimating the hidden state of a linear dynamical system from noisy observations. The filter operates recursively in two steps, first predicting the next state using the known system dynamics and tracking its uncertainty (prediction step), then updating that prediction by comparing it against the noisy observation (update step). The weight given to each is controlled by the Kalman gain, which balances the uncertainty in the prediction against the uncertainty in the observation [@kalman1960new].
+Real-world systems are often nonlinear, making the standard KF ineffective. @jazwinski1970stochastic formalised an Extended Kalman Filter (EKF) which addresses this by locally linearising the nonlinear dynamic system at each time step. This is done via a first-order Taylor expansion, allowing the standard Kalman Filter to be applied approximately [@jazwinski1970stochastic].
+
+
+
+
 
 # Methodology and Analysis
 
