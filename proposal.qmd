@@ -94,7 +94,7 @@ In DSSMs, the transition model captures how the latent state evolves over time, 
 The project milestones and deliverables are summarised in @tbl-milestones, which outlines the key dates, phases, and planned outputs for each stage.
 
 \clearpage
-\begin{table}[!p]
+\begin{table*}
 \centering
 \caption{Project Timeline and Milestones}
 \label{tbl-milestones}
@@ -110,7 +110,7 @@ September - October 2026 & Write-up & Refine the report, review it with the supe
 November 2026 & Poster presentation & Prepare and present the final poster. \\
 \hline
 \end{tabular}
-\end{table}
+\end{table*}
 
 \clearpage
 
