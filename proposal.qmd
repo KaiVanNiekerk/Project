@@ -59,8 +59,6 @@ In DSSMs, the transition model captures how the latent state evolves over time, 
 
 @klushyn2021latent resolve this by introducing the Extended Kalman Variational Autoencoder (EKVAE), which replaces the LSTM in the transition model with neural linearisation. Rather than computing the Jacobian via a Taylor expansion as in the standard EKF, or through an LSTM as in the KVAE, the EKVAE learns it directly as a function of the current state using a neural network, finding the best linearisation at each time step. In practical terms, this means the model uses a learned, state-dependent local linear approximation to the nonlinear dynamics, so the transition remains anchored in the current latent state rather than in a recurrent memory. This restores the Markov property while still allowing for a closed form KF. Combined with the CO framework, the EKVAE outperforms RNN-based DSSMs on prediction accuracy and system identification [@klushyn2021latent]. However, EKVAE has so far been evaluated only on two clean, low-dimensional benchmarks (simulated pendulum and reacher arm). This project therefore examines whether its reported gains hold on longer sequences, higher-dimensional observations, and noisier data.
 
-This literature review supports the project's central aim: to determine whether the gains reported for EKVAE remain stable when the model is evaluated beyond the controlled benchmarks used in the original paper.
-
 # Methodology and Analysis
 
 **Repository and Collaboration:** We will maintain a shared Git repository to track code, experiments, and documentation throughout the project.
