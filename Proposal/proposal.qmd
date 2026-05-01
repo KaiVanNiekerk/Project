@@ -13,7 +13,7 @@ format:
     fontsize: 11pt
     geometry: margin=1in
     number-sections: true
-abstract: "Learning latent state-space models from partial observations remains challenging: standard variational approaches often fail to identify true system dynamics, and recurrent inference networks violate Markov assumptions. This project implements EKVAE, which combines extended Kalman filtering with constrained optimisation to enforce both latent dynamics recovery and latent Markov consistency. We reproduce the paper's benchmark results, compare against KVAE baselines, and assess robustness through stress tests on longer sequences, higher-dimensional observations, and noisier data. We evaluate via prediction accuracy, latent-state recovery, and long-horizon forecasting stability."
+abstract: "Learning latent state-space models from partial observations remains challenging: standard variational approaches often struggle to recover the true underlying system dynamics, and recurrent inference networks can violate Markov assumptions. This project studies the Kalman Variational Autoencoder (KVAE) as the main model and the Extended Kalman Variational Autoencoder (EKVAE). We will evaluate how well these models recover latent dynamics and support long-horizon prediction on benchmark sequence data, then test whether EKVAE offers improvements under various conditions such as longer sequences, higher-dimensional observations, and noisier inputs. Evaluation will focus on prediction accuracy, latent-state recovery, and forecasting stability."
 ---
 
 # Problem Statement
