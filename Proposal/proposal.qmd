@@ -13,22 +13,22 @@ format:
     fontsize: 11pt
     geometry: margin=1in
     number-sections: true
-abstract: "Learning latent state-space models from partial observations remains challenging: standard variational approaches often struggle to recover the true underlying system dynamics, and recurrent inference networks can violate Markov assumptions. This project studies the Kalman Variational Autoencoder (KVAE) as the main model and the Extended Kalman Variational Autoencoder (EKVAE). We will evaluate how well these models recover latent dynamics and support long-horizon prediction on benchmark sequence data, then test whether EKVAE offers improvements under various conditions such as longer sequences, higher-dimensional observations, and noisier inputs. Evaluation will focus on prediction accuracy, latent-state recovery, and forecasting stability."
+abstract: "Learning latent state-space models from partial observations remains challenging: standard variational approaches often struggle to recover the true underlying system dynamics, and recurrent inference networks can violate Markov assumptions. This project studies the Kalman Variational Autoencoder (KVAE) as the main model and the Extended Kalman Variational Autoencoder (EKVAE) as a potential improvement. We will evaluate how well these models recover latent dynamics and support long-horizon prediction on benchmark sequence data, then test whether EKVAE offers improvements under various conditions such as longer sequences, higher-dimensional observations, and noisier inputs. Evaluation will focus on prediction accuracy, latent-state recovery, and forecasting stability."
 ---
 
 # Problem Statement
 
-Many real systems are only partially observed. We measure noisy signals, but not the latent state that governs the dynamics. A model may perform well on short windows and still fail to recover the underlying system behaviour. The central challenge is to learn hidden-state dynamics from partial observations in a way that remains interpretable, uncertainty-aware, and robust on more difficult data.
+Learning latent state-space models from partial observations remains difficult because the model must balance two goals at once: recovering the underlying system dynamics and preserving a coherent probabilistic structure over time. Existing variational approaches often fail to identify the true dynamics, while recurrent models can weaken Markov assumptions by storing information in their own hidden state. This project studies whether KVAE can provide a stronger baseline for sequential modelling, and whether EKVAE offers any additional gains under more demanding data conditions.
 
 # Hypotheses
 
-**Primary Hypothesis:** EKVAE will outperform KVAE, Deep Kalman Filter, and standard DSSM baselines in recovering latent dynamics and producing accurate forecasts from partial observations.
+**Primary Hypothesis:** KVAE and its extension will outperform the Deep Kalman Filter and standard DSSM baselines in recovering latent dynamics and producing accurate forecasts from partial observations.
 
 **Secondary Hypothesis 1:** Constrained optimisation will improve system identification relative to standard ELBO training.
 
 **Secondary Hypothesis 2:** EKVAE's relative advantage will narrow on longer or noisier sequences, but it will maintain statistical superiority over KVAE and DSSM baselines across all difficulty levels.
 
-**Secondary Hypothesis 3:** EKVAE will outperform KVAE-style baselines when strict Markov consistency in the latent state is important.
+**Secondary Hypothesis 3:** KVAE-style models will perform better than DSSM baselines when strict Markov consistency in the latent state is upheld.
 
 # Aims and Objectives
 
@@ -37,9 +37,9 @@ The following objectives evaluate how effectively EKVAE learns nonlinear dynamic
 1. Reproduce the main paper results on the benchmark datasets to trend-level agreement.
 2. Compare EKVAE with a reduced set of DSSM and Kalman-family baselines.
 3. Assess whether constrained optimisation improves learning relative to standard ELBO training.
-4. Evaluate the models on harder or noisier sequences as a test of generalisation.
+4. Evaluate the models on longer sequences, higher-dimensional observations, and noisier inputs as a test of generalisation.
 5. Determine which components contribute most strongly to performance, including the latent dynamics, inference method, and prior structure.
-6. Implement the models in stages, beginning with ELBO, then CO, then EKVAE, and introducing VHP only if the earlier stages are stable.
+6. Implement the models in stages, beginning with ELBO, then CO, then KVAE and its related extensions, and introducing VHP only if the earlier stages are stable.
 
 # Literature Review
 
