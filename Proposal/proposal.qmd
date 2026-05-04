@@ -18,7 +18,7 @@ abstract: "Learning latent state-space models from partial observations remains 
 
 # Problem Statement
 
-Learning latent state-space models from partial observations remains difficult because the model must balance two goals at once: recovering the underlying system dynamics and preserving a coherent probabilistic structure over time. Existing variational approaches often fail to identify the true dynamics, while recurrent models can weaken Markov assumptions by storing information in their own hidden state. This project studies whether KVAE can provide a stronger baseline for sequential modelling, and whether EKVAE offers any additional gains under more demanding data conditions.
+Many real-world systems can only be partially observed, meaning the signals we measure are noisy projections of a hidden state that governs the underlying dynamics. Learning accurate models of these systems requires two complementary capabilities: a principled probabilistic structure for reasoning under uncertainty, and a temporal framework for propagating that uncertainty through time. Variational autoencoders provide the former by learning structured latent representations, while Kalman-style filtering provides the latter through recursive state estimation. Neither approach alone is sufficient — VAEs lack temporal consistency and Kalman filters require the dynamics to be known in advance. This project studies whether combining these two frameworks, as in the KVAE and its extension the EKVAE, produces models that are more capable of recovering true system dynamics from partial observations, and whether these gains persist under more demanding data conditions.
 
 # Hypotheses
 
