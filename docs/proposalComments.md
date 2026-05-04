@@ -1,3 +1,11 @@
+# Comments on Proposal 04/05
+
+Only reviewed the problem statement. 
+
+Its very repetitive when compared to the abstract. Like exact same wording. You can just have the problem statement (no abstract) and combine the two. Otherwise, you need to change wording of the whole Learning latent .... and be a tiny bit more explicit about why KF and VAE structures aid each other. This latter part should solve the repetitiveness of an explanation. 
+
+Just lmk if anything is unclear. 
+
 # Comments on Proposal 29/04
 
 ### Abstract
@@ -29,4 +37,6 @@ What is a *harder* sequence? Be more specific. Speak characteristics.
 ### Methodology
 
 - I dont like the phrasing of stress tests for data. 
+
+
 
