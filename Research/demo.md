@@ -16,7 +16,7 @@ This leads us to our other key idea the Kalman Filter. Kalman filters estimate a
 
 KVAE attempts to get the best out of these two ideas. It keeps the structured latent representation from the VAE and uses closed-form Kalman-style filtering to handle sequences which is a significant improvement over standard DSSMs and makes it a much better fit for time series and video data than a standard VAE. But KVAE still has it's limitations. In particular, recurrent parts of the model can store information in hidden states in a way that weakens the Markov assumption, and that can make the learned dynamics less accurate compared to the real system's dynamics.
 
-The EKVAE fixes this by learning the local dynamics directly as a function of the current latent state rather than through a recurrent memory via neural linearisation. This restores the Markov property while retaining closed-form Kalman filtering. Training is usually done by maximising the Evidence Lower Bound, which balances reconstruction quality against regularisation, but simply maximising the ELBO does not quarantee that the underyling dynamics have been properly learned. Constrained optimisation builds on this idea by adding a reconstruction constraint to the ELBO, which pushes the model to learn latent states that better capture the underlying system dynamics.
+The EKVAE fixes this by learning the local dynamics directly as a function of the current latent state rather than through a recurrent memory via neural linearisation *may need to add short explanation on this*. This restores the Markov property while retaining closed-form Kalman filtering. Training is usually done by maximising the Evidence Lower Bound, which balances reconstruction quality against regularisation, but simply maximising the ELBO does not quarantee that the underyling dynamics have been properly learned. Constrained optimisation builds on this idea by adding a reconstruction constraint to the ELBO, which pushes the model to learn latent states that better capture the underlying system dynamics.
 
 ## Hypotheses
 
@@ -24,8 +24,8 @@ Our main hypothesis is that KVAE-style models will improve latent-state recovery
 
 ## Evaluation and data
 
-We will evaluate prediction accuracy measured by mean squared error and R-squared, latent-state recovery, and long-horizon prediction consistency. We will start with the paper benchmarks including the pendulum and reacher datasets for direct comparison, then run robustness tests by varying sequence length, observation dimensionality, and noise level. *asking whether the EKVAE's advantages hold beyond the paper's controlled benchmarks*
+We will evaluate prediction accuracy measured by mean squared error and R-squared, latent-state recovery, and long-horizon prediction consistency. We will start with the paper benchmarks including the pendulum and reacher datasets for direct comparison, then run robustness tests by varying sequence length, observation dimensionality, and noise level. *asking whether the EKVAE's advantages hold beyond the paper's controlled benchmarks, could merge some stuff here if closing not needed*
 
 ## Closing *Dont think we need this but must ask jake*
 
-So in short, our project aims to identify whether these models can learn hidden dynamics more effectively than standard approaches. The goal is not only to compare models, but also to understand why they work and where they start to fail. Finally, displayed is our current timeline and milestone plan for the overall project. *this might also need to be cleared up.*
+So in short, our project aims to identify whether these models can learn hidden dynamics more effectively than standard approaches. The goal is not only to compare models, but also to understand why they work and where they start to fail. Finally, displayed is our current timeline and milestone plan for the overall project. 
