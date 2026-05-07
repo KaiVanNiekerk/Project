@@ -10,7 +10,7 @@ The first building block in this space is the Variational Autoencoder. A VAE enc
 
 To handle sequential data, VAEs have been extended into Deep State-Space Models, which learn both the transition and observation models using neural networks, incorporating a Kalman-style predict and update structure. However, these models rely on RNNs which violate the Markov assumption.
 
-This leads us to the kalman filter.  It estimates a hidden state over time by alternating between a prediction step and an update step using the next observation. Unlike a neural network which is powerful but black box, the Kalman Filter has a clean mathematical foundation, you can reason about exactly what it's doing and why at every step. However it assumes the dynamics are known and linear, which makes it too restrictive for many modern problems. The linearity can be seen in its equation, we thus introduce the Extended Kalman Filter which relaxes this by making F a function of the current state, allowing it to handle nonlinear dynamics.
+This leads us to the kalman filter.  It estimates a hidden state over time by alternating between a prediction step and an update step using the next observation. Unlike a neural network which is powerful but black box, the Kalman Filter has a clean mathematical foundation, you can reason about exactly what it's doing and why at every step. However it assumes the dynamics are known and linear, which makes it too restrictive for many modern problems. The linearity can be seen in its equation in which there is 1 constant F, we thus introduce the Extended Kalman Filter which relaxes this by making F a variable function of the current state, allowing it change and handle nonlinear dynamics. 
 
 ## KVAE and EKVAE
 
