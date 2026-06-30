@@ -10,7 +10,7 @@ The main goal is to make the project intellectually coherent. I want to understa
 
 ## 1. Project Direction: K2VAE for Probabilistic Forecasting
 
-My project is now centred on K2VAE as a structured probabilistic forecasting model for time series. The core question is not simply “can we predict the future?”, but “can we predict the future in a way that is both structured and uncertainty-aware?”
+My project is now centred on K2VAE as a structured probabilistic forecasting model for time-series data. The core question is not simply “can we predict the future?”, but “can we predict the future in a way that is both structured and uncertainty-aware?”
 
 That is why this direction matters. Time-series forecasting is difficult when the underlying dynamics are nonlinear, noisy, and unstable over long horizons. Many standard models can predict one step ahead reasonably well, but they become less reliable when the forecast horizon grows. That is where K2VAE becomes interesting.
 
@@ -149,7 +149,7 @@ K2VAE is also a variational model. That means it does not only learn a determini
 The core variational objective is the ELBO:
 
 $$
-\mathcal{L}_{ELBO} = \mathbb{E}_{q(z\mid x)}[\log p(y\mid z,x)] - \mathrm{KL}(q(z\mid x) \| p(z\mid x))
+\mathcal{L}_{ELBO} = \mathbb{E}_{q(z\mid x)}[\log p(y\mid z,x)] - \mathrm{KL}(q(z\mid x) \| p(z))
 $$
 
 The first term rewards predictive accuracy. The second term regularises the latent distribution so that it does not drift too far from the prior.
@@ -171,7 +171,7 @@ This is relevant because K2VAE is trained end-to-end and needs to learn both the
 
 ### 4.9 Patching and Tokenisation
 
-The paper uses patching as an input representation. Instead of treating each time step as an isolated token, the model groups nearby time points into patches. These patches serve as the basic units from which the temporal dynamics are reasoned about.
+The paper uses patching as an input representation. Instead of treating each time step as an isolated token, the model groups nearby time points into patches. These patches form the basic units from which the temporal dynamics are reasoned about.
 
 This is important because it gives the model a slightly more structured notion of local temporal context. It also helps the model treat time series as a sequence of meaningful blocks rather than as a long chain of individual points.
 
@@ -240,9 +240,9 @@ These questions are precise enough to guide the project without making it too na
 
 ## 8. Methodology and Experimental Plan
 
-The project should be approached in stages so that it stays interpretable.
+The project should be approached in stages so that it remains interpretable.
 
-### Phase 1: Build a strong baseline
+### 8.1 Phase 1: Build a strong baseline
 
 I should first ensure that the data pipeline, forecasting setup, and evaluation metrics are all working properly. This means checking:
 
@@ -251,7 +251,7 @@ I should first ensure that the data pipeline, forecasting setup, and evaluation 
 - what the train/validation/test split is;
 - and whether the baseline is producing sensible results.
 
-### Phase 2: Implement a simplified K2VAE prototype
+### 8.2 Phase 2: Implement a simplified K2VAE prototype
 
 The first version does not need to be an exact reproduction of the paper. The goal is to implement the main conceptual structure:
 
@@ -261,7 +261,7 @@ The first version does not need to be an exact reproduction of the paper. The go
 - a Kalman-style refinement step,
 - and a probabilistic decoder.
 
-### Phase 3: Compare with baselines
+### 8.3 Phase 3: Compare with baselines
 
 The model should be compared against a small but meaningful set of baselines, including:
 
@@ -270,7 +270,7 @@ The model should be compared against a small but meaningful set of baselines, in
 - a basic state-space or linear dynamical model,
 - and optionally a simple Kalman baseline if appropriate.
 
-### Phase 4: Analyse the contribution of each component
+### 8.4 Phase 4: Analyse the contribution of each component
 
 Ablations are useful, but they should be targeted. The key questions are:
 
@@ -280,7 +280,7 @@ Ablations are useful, but they should be targeted. The key questions are:
 
 These are the experiments that sharpen the thesis story.
 
-### Phase 5: Interpret the results
+### 8.5 Phase 5: Interpret the results
 
 The final step is not only to report numbers. I need to explain what the results mean in terms of the underlying model assumptions and the forecasting problem itself.
 
@@ -306,15 +306,37 @@ These risks are not reasons to avoid the project. They are part of what makes th
 
 ---
 
-## 10. Open Questions
+## 10. Open Questions and Working Hypotheses
 
-The main open questions for this project are:
+These are the main research questions I want to keep in view while working on the project. Each one is important not only because it is interesting, but because it directly affects how convincing the thesis story will be.
 
-1. Does K2VAE really improve long-horizon forecasting in practice?
-2. Is the Koopman-inspired component meaningfully helpful, or is it mostly a conceptual wrapper?
-3. Does the Kalman refinement improve stability and uncertainty calibration?
+1. Does K2VAE actually improve long-horizon forecasting in practice?
+
+   This is the most important question. The motivation for the model is that long-horizon forecasting suffers from error accumulation and unstable dynamics, and K2VAE is meant to address this by imposing a more structured transition process. My expectation is that K2VAE should perform better than a weaker baseline on longer horizons, especially when the dynamics are not trivial. I would be interested to see whether the gain is strong enough to justify the extra architectural complexity.
+
+2. Is the Koopman-inspired component genuinely helpful, or is it mainly a conceptual idea with limited practical value?
+
+   The Koopman part is central to the model, but it is also the part that could fail if the learned representation does not actually expose a simpler dynamical structure. My hypothesis is that the Koopman-inspired component should help when the data contain underlying structure that is easier to model in a transformed space. If the data are too irregular or too noisy, then the benefit may be small.
+
+3. Does the Kalman-style refinement improve stability and uncertainty calibration?
+
+   The Kalman refinement is meant to correct the imperfect linearisation and to produce a more principled uncertainty estimate. My expectation is that it should improve robustness, especially over longer horizons where small modelling errors can accumulate. I also expect it to help the model produce more calibrated uncertainty, rather than just sharper but misleading forecasts.
+
 4. How sensitive is the model to data smoothness, noise, and sequence length?
-5. Is the method strong enough to support a convincing thesis narrative?
+
+   This question matters because the method depends on assumptions about temporal structure. I expect K2VAE to work best on datasets where the dynamics are reasonably smooth and structured, and less well on highly irregular, chaotic, or very noisy sequences. I also expect performance to degrade more slowly than simpler models when the horizon grows, but this is something that needs to be tested rather than assumed.
+
+5. Is the probabilistic formulation genuinely useful, or is it mostly extra complexity?
+
+   The probabilistic component is one of the main reasons K2VAE is interesting, but it also adds difficulty. My hypothesis is that the probabilistic formulation should provide real value in terms of uncertainty estimates and calibration, not just in terms of predictive likelihood. If the model produces better uncertainty behaviour without sacrificing point forecast quality, then the probabilistic modelling is justified.
+
+6. Can the learned latent dynamics be meaningfully interpreted?
+
+   This is a more secondary question, but it still matters for the thesis. I expect that the latent representation will not be as interpretable as a classical dynamical system, but it may still reveal structure that is useful for understanding the temporal evolution. The question is whether the learned state space is informative enough to support a meaningful interpretation, or whether it remains mostly a practical device.
+
+7. Is K2VAE strong enough to support a convincing thesis narrative?
+
+   This is the broader evaluative question. My expectation is that the answer is yes if the model shows a clear and consistent advantage on the right type of tasks. The strongest thesis story would be that structured latent dynamics can improve probabilistic forecasting in a principled way, rather than simply by adding more complexity.
 
 ---
 
@@ -323,52 +345,3 @@ The main open questions for this project are:
 K2VAE is a strong project direction because it combines three ideas that are all relevant to the forecasting problem: structured dynamics, learned representation, and probabilistic modelling. The main appeal is that it does not treat forecasting as a purely black-box task. It tries to make the temporal evolution more understandable and more stable by using a Koopman-inspired linearisation and a Kalman-style refinement step.
 
 For my own project, the most important thing is to keep the focus on the real contribution: not just building a model that predicts well, but understanding whether a structured latent dynamics model can improve probabilistic forecasting in a principled and meaningful way.
-
-This is the part that directly supports the thesis.
-
-### 14.3 How Ablations Fit Here
-
-Ablations are useful, but they should be interpreted carefully. They are not automatically required for the project, and they should not become a large distraction.
-
-Ablations are most valuable when they answer a clear question, such as:
-
-- Does the Koopman-inspired component help?
-- Does the Kalman-style refinement improve results?
-- Is the probabilistic objective worth the added complexity?
-
-If an ablation does not help answer a meaningful question, it is probably better treated as a secondary investigation rather than a main experimental priority.
-
-### 14.4 Practical Rule of Thumb
-
-A useful rule for this project is:
-
-- if a component helps answer the main research question, keep it,
-- if it mainly adds complexity without sharpening the thesis claim, it can be deferred or simplified.
-
-This keeps the project focused while still leaving room for deeper analysis if time and results allow.
-
----
-
-## 16. Open Questions for the Project
-
-1. Does the Koopman-inspired representation actually improve long-horizon forecasting compared with a simpler latent model?
-2. Is the Kalman-style refinement beneficial in practice, or does it mainly add complexity?
-3. How sensitive is the model to sequence length and noise?
-4. Does the method work better on smoother, more structured dynamics than on irregular or chaotic data?
-5. How important is the probabilistic formulation compared with a deterministic forecaster?
-6. Can we meaningfully interpret the learned latent dynamics?
-7. Does the method offer a stronger thesis story than a generic deep forecasting model?
-
----
-
-## 17. Summary
-
-K2VAE is a promising research direction because it combines modern probabilistic modelling with a more structured view of time-series dynamics. Its main appeal is that it tries to make nonlinear forecasting more manageable by using a Koopman-inspired transformation and a Kalman-style refinement process.
-
-This document is intended to be sufficiently detailed that it can act as a standalone reference for the project. If read carefully, it should provide the core theoretical background, the main implementation considerations, the experimental strategy, and the main risks and priorities needed to carry the project forward.
-
-For our project, this is attractive because it gives us a clear and modern thesis narrative: learn structured latent dynamics, model uncertainty, and improve long-horizon forecasting.
-
-The main risks are also clear. The model depends on how well the learned linearisation captures reality, how stable the training procedure is, and whether the probabilistic latent representation is expressive enough for real-world data. These concerns should be treated as part of the research rather than as reasons to avoid the approach.
-
-Overall, K2VAE is a strong direction for a detailed research document, implementation study, and thesis framing because it sits at the intersection of classical dynamical systems ideas and modern deep probabilistic modelling. If read carefully, this document should now provide sufficient background, terminology, practical guidance, and project framing to serve as a standalone reference for the work even without returning to the original paper immediately.
