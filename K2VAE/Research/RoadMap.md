@@ -196,3 +196,30 @@ $$
 
 which would need to become a genuine observation-to-state mapping rather
 than treating $\hat X^H$ as a pseudo-observation.
+
+# Libraries
+
+## Libraries to use
+
+| Library | Role |
+|---|---|
+| **PyTorch** | Core tensor ops, autograd, `nn.Module` for KoopmanNet/KalmanNet/Decoder. |
+| **NumPy** | Vectorised array ops outside the autograd graph; sanity-checking eDMD pseudoinverse on toy data. |
+| **einops** | Clean, readable reshape/rearrange for patching ($X\in\mathbb{R}^{N\times T}\to X^P\in\mathbb{R}^{N\times s\times n}$); self-documenting tensor shape contracts. |
+| **pandas** | Loading/preprocessing raw time series CSVs, resampling, train/val/test splitting — done independently rather than via ProbTS's `DataManager`. |
+| **scikit-learn** | `StandardScaler`/`MinMaxScaler` for normalisation; `LinearRegression` for the $R^2$ system-identification metric. |
+| **matplotlib / seaborn** | State-space visualisations, training curves, ablation bar charts. |
+| **plotly** | Interactive 3D latent-space scatter plots for exploring barrel/circle structure. |
+| **properscoring** (or hand-written) | CRPS computation, written from the empirical-CDF definition rather than borrowed. |
+| **wandb** | Experiment tracking across ablation runs. |
+| **tqdm** | Progress bars for training loops. |
+| **PyTorch Lightning** *(optional)* | Generic trainer utility only — not adopting their `LightningModule`/config-YAML structure. |
+
+## Libraries deliberately NOT used
+
+| Library | Reason to avoid |
+|---|---|
+| **ProbTS** | The official K²VAE benchmark harness; reimplementing dataset classes independently (using only publicly documented context/prediction lengths and frequencies) is both more defensible academically and avoids mirroring undocumented preprocessing quirks. |
+| **pydmd** | The one-step eDMD used (`X_fore @ pinv(X_back)`) is trivial; a full DMD library is unnecessary and writing it by hand ensures understanding of the local Koopman operator. |
+| **filterpy** | Does not support the *learned* gain/matrices structure EKVAE/K²VAE require; the predict/update recursion is implemented by hand regardless. |
+| **JAX / Pyro** | Native PyTorch stack preferred for consistency across the project. |
