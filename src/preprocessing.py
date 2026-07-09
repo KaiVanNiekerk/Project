@@ -58,6 +58,8 @@ def scale(train_df: pd.DataFrame, val_df: pd.DataFrame, test_df: pd.DataFrame) -
 """A custom dataset for handling sliding window data."""
 class swDataset(Dataset):
     
+    # Input window = T
+    # Output window = L
     def __init__(self, data: np.ndarray, input_window: int, output_window: int):
         self.data = data
         self.input_window = input_window
@@ -68,10 +70,14 @@ class swDataset(Dataset):
         return len(self.data) - self.input_window - self.output_window + 1
 
     # Extract single window 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx) -> tuple[torch.Tensor, torch.Tensor]:
+        # i to i + T
         x = self.data[idx:idx + self.input_window]
+        # i + T to i + T + L
         y = self.data[idx + self.input_window:idx + self.input_window + self.output_window]
         return torch.tensor(x, dtype=torch.float32), torch.tensor(y, dtype=torch.float32)
+    
+
 
 if __name__ == "__main__":
     # Example usage
