@@ -11,7 +11,8 @@ We have to perform preprocessing on our data which consists of these steps:
 1. Load the CSV file into a pandas DataFrame.
 2. Split the dataset into training, validation and testing sets.
 3. Scale the training, validation and testing datasets using StandardScaler.
-4. Sliding Window 
+4. Sliding Window, to create many overlapping context windows of size T, and for each context window we have a target window of size L
+5. Patchify, to split the context window into smaller distinct patches of size S, which will be used as input to the transformer model.
 """
 
 """
@@ -55,7 +56,11 @@ def scale(train_df: pd.DataFrame, val_df: pd.DataFrame, test_df: pd.DataFrame) -
     test_scaled = scaler.transform(test_df)
     return train_scaled, val_scaled, test_scaled, scaler
 
-"""A custom dataset for handling sliding window data."""
+"""A custom dataset for creating sliding window data.
+    We will start with a sldiing window of some length starting at position i
+    then move to start at position i+1, thus mvoing the context window time step by time step
+    But we still have lots of overlap
+    This si the batching process"""
 class swDataset(Dataset):
     
     # Input window = T
@@ -77,7 +82,37 @@ class swDataset(Dataset):
         y = self.data[idx + self.input_window:idx + self.input_window + self.output_window]
         return torch.tensor(x, dtype=torch.float32), torch.tensor(y, dtype=torch.float32)
     
+"""Patching now happens inside a sliding window to ensure there is no overlapping 
+    within a context window.
+    Args:
+        x (torch.Tensor): Input tensor of shape (batch_size, input_window, num_features).
+        patch_size (int): Size of each patch.
+    Returns:
+        torch.Tensor: Patched tensor of shape (batch_size, num_patches, patch_size, num_features).
+    """
+def patchify(x: torch.Tensor, patch_size: int) -> torch.Tensor:
+    # Rearrange the tensor to create patches
+    # Thus splitting the mulivariate batch into distinct patches of size patch_size
+    # x shape: (batch_size (B), input_window (T), num_features (N))
+    # output shape: (batch_size (B), num_patches (n), patch_size (S), num_features (N), where n = T // S)
+    return rearrange(x, 'B (n s) N -> B n s N', s=patch_size)
 
+"""Reconstruct the original sequence from patches.
+    Args:
+        x (torch.Tensor): Patched tensor of shape (batch_size, num_patches, patch_size, num_features).
+        patch_size (int): Size of each patch.
+    Returns:
+        torch.Tensor: Reconstructed tensor of shape (batch_size, input_window, num_features).
+    """
+def unpatchify(x: torch.Tensor, patch_size: int) -> torch.Tensor:
+    # Rearrange the tensor to reconstruct the original sequence
+    # x shape: (batch_size (B), num_patches (n), patch_size (S), num_features (N))
+    # output shape: (batch_size (B), input_window (T), num_features (N)), where T = n * S
+    return rearrange(x, 'B n s N -> B (n s) N', s=patch_size)
+
+## Add test patching and then create the tokensEmbedding and flatten the array
+class TokenEmbedding():
+    pass
 
 if __name__ == "__main__":
     # Example usage
