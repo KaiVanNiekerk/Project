@@ -13,6 +13,7 @@ We have to perform preprocessing on our data which consists of these steps:
 3. Scale the training, validation and testing datasets using StandardScaler.
 4. Sliding Window, to create many overlapping context windows of size T, and for each context window we have a target window of size L
 5. Patchify, to split the context window into smaller distinct patches of size S, which will be used as input to the transformer model.
+6. Token embedding to flatten the patch and then make it usable by pytorch through a general size d.
 """
 
 """
@@ -90,12 +91,13 @@ class swDataset(Dataset):
     Returns:
         torch.Tensor: Patched tensor of shape (batch_size, num_patches, patch_size, num_features).
     """
+# Note patch size needs to be picked, IN paper they dont specify.
 def patchify(x: torch.Tensor, patch_size: int) -> torch.Tensor:
     # Rearrange the tensor to create patches
     # Thus splitting the mulivariate batch into distinct patches of size patch_size
     # x shape: (batch_size (B), input_window (T), num_features (N))
     # output shape: (batch_size (B), num_patches (n), patch_size (S), num_features (N), where n = T // S)
-    return rearrange(x, 'B (n s) N -> B n s N', s=patch_size)
+    return rearrange(x, 'B (n s) N -> B N s n', s=patch_size)
 
 """Reconstruct the original sequence from patches.
     Args:
@@ -108,15 +110,36 @@ def unpatchify(x: torch.Tensor, patch_size: int) -> torch.Tensor:
     # Rearrange the tensor to reconstruct the original sequence
     # x shape: (batch_size (B), num_patches (n), patch_size (S), num_features (N))
     # output shape: (batch_size (B), input_window (T), num_features (N)), where T = n * S
-    return rearrange(x, 'B n s N -> B (n s) N', s=patch_size)
+    return rearrange(x, 'B N s n -> B (n s) N', s=patch_size)
 
-## Add test patching and then create the tokensEmbedding and flatten the array
-class TokenEmbedding():
-    pass
+"""
+    Have to make this make sense...
+    This class is used to project our inputs into the required output values for our K^2. 
+    We make use of a NN to do this projection.
+    This will be used to project the flattened patches into a d-dimensional space, which is suitable for input to a transformer model.
+    Additionally this d is chosen by use as a hyper parameter and the linear combination of the raw values learned through back prop.
+    For example this allows us to have variable numbers in out datasets as they are always 
+    forced into n meaningful patches of d numbers which will then be feed into the K^2VAE
+"""
+class TokenEmbedding(nn.Module):
+    # Initialise and project NN,
+    # d (We must decide its value) is the desired embedding dimension
+    # num_vars * patch size is number of inputs
+    def __init__(self, num_vars: int, patch_size: int, d: int):
+        super().__init__() # must initalising super as to define necessary dicts for NN to work.
+        self.patch_size = patch_size
+        self.proj = nn.Linear(num_vars * patch_size, d) # creation of NN
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # X: (B, T, N) — swDataset's native output
+        Xp = patchify(x, self.patch_size)          # (B, N, s, n)
+        Xp = rearrange(Xp, "b n s p - b p (n s)") # flatten (N,s) per patch
+        Xp = self.proj(Xp)                          # (B, p, d)
+        return rearrange(Xp, "b p d -> b d p")      # (B, d, n)
 
 if __name__ == "__main__":
     # Example usage
-    df = load_csv(r"datasets\electricity\electricity.csv") #raw string to geta round \ errors
+    df = load_csv(r"datasets\electricity\electricity.csv") #raw string to get around \ errors
     #print("great success")
     train_df, val_df, test_df = split(df, train_frac=0.7, val_frac=0.15)
     print(train_df)
