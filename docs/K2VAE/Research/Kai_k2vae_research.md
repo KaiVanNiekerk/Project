@@ -2,9 +2,9 @@
 
 ## Purpose
 
-This document is my personal research note for the K2VAE project direction. It is meant to be a complete working overview of the idea, not a formal paper draft. The purpose is to keep the project grounded in the actual technical story of K2VAE: how it combines nonlinear forecasting, structured latent dynamics, and probabilistic inference into one model.
+This document is my personal research note for the K2VAE project direction. It is not a formal paper draft; it is a working reference that should explain the model clearly enough for implementation, analysis, and thesis planning.
 
-The main goal is to make the project intellectually coherent. I want to understand not only what K2VAE does, but why it is a reasonable model for long-horizon probabilistic forecasting and what assumptions it makes.
+The aim is to keep the project grounded in the actual technical story of K2VAE: how it combines nonlinear forecasting, structured latent dynamics, and probabilistic inference into one model. I want the document to explain not only what K2VAE does, but why it is a reasonable model for long-horizon probabilistic forecasting and what assumptions it makes.
 
 ---
 
@@ -100,6 +100,10 @@ This is important because it gives the model a tractable temporal structure. K2V
 
 Koopman theory is central to K2VAE. The basic idea is that a nonlinear dynamical system can sometimes be viewed through a transformed representation where its evolution becomes approximately linear.
 
+In plain language, Koopman theory says: if the original variables are awkward to model directly, try to describe the system using a better set of features. In that feature space, the evolution may be much simpler even if the original system is nonlinear.
+
+The important shift is that Koopman theory does not try to linearise the state itself. Instead, it linearises how we track the state through chosen measurements or features. That is a subtler but very powerful idea: the system can remain nonlinear in its original variables while becoming close to linear once we look at the right functions of those variables.
+
 For a nonlinear system
 
 $$
@@ -114,7 +118,34 @@ $$
 
 where $K$ is the Koopman operator. The important intuition is that although the original dynamics may be nonlinear in the original state space, they may be approximately linear in the transformed measurement space.
 
-This is exactly the motivation behind K2VAE: if I can find a representation where the dynamics are easier to model linearly, then forecasting should become more stable and less error-prone.
+Here, $\psi(x)$ is often called an observable or measurement of the state. It can include the raw state itself, but it can also include nonlinear features, combinations of variables, or learned latent features. The Koopman operator then describes how those observables evolve over time.
+
+The key point is that the Koopman operator acts on functions of the state, not directly on the state in the usual way. That is why it is useful: even when the underlying dynamics are nonlinear, the evolution of observables can be expressed through a linear operator.
+
+In practice, K2VAE does not try to build the infinite-dimensional Koopman operator directly. Instead, it learns a finite-dimensional approximation with a neural measurement function and a data-driven transition operator. That is why the Koopman part is useful here: it gives the model a principled way to search for a latent space in which time evolution is easier to predict.
+
+This is exactly the motivation behind K2VAE: if I can find a representation where the dynamics are easier to model linearly, then forecasting should become more stable and less error-prone. That matters especially for long-horizon forecasting, because a model that behaves more linearly in latent space is usually easier to roll forward without errors exploding too quickly.
+
+The practical benefit is that the model gets to separate two tasks:
+
+- learning a representation where the time series is easier to describe;
+- learning how that representation evolves forward in time.
+
+That separation is one of the main reasons Koopman ideas are attractive for forecasting.
+
+### 4.4.1 What the Koopman Operator Actually Does
+
+In a simple sense, the Koopman operator tells us how a feature of the system at time $k$ turns into a feature at time $k+1$. If $\psi$ is the feature map, then the operator $K$ provides the rule that moves us forward one step in that feature space.
+
+So instead of asking:
+
+- “What is the next raw state?”
+
+the Koopman view asks:
+
+- “How do the useful features of the state evolve from one step to the next?”
+
+That makes forecasting more manageable because linear evolution in feature space is much easier to extrapolate than arbitrary nonlinear evolution in the original space.
 
 ### 4.5 Measurement Function and the Idea of a Better Coordinate System
 
@@ -122,7 +153,25 @@ The measurement function $\psi$ is one of the most important conceptual pieces i
 
 The model does not assume that the original observation space is already the best space for forecasting. Instead, it learns a new representation where the dynamics may look simpler.
 
-This is important because forecasting is often easier in a good representation than in the raw observation space.
+This is important because forecasting is often easier in a good representation than in the raw observation space. In the project, the measurement function is what makes the Koopman idea practical: it takes raw time-series patches and turns them into features that are easier for the linear transition model to work with.
+
+So the role of $\psi$ is not just compression. It is a learned change of coordinates. If the learned coordinates are good, then the subsequent Koopman operator can capture useful temporal structure with much less complexity than a fully nonlinear sequence model.
+
+Another way to think about it is this: the measurement function tries to create a latent space where the future is easier to predict. That space should ideally have three properties:
+
+- it should retain enough information about the original data to support forecasting;
+- it should make the dynamics look simpler or closer to linear;
+- and it should be stable enough that rolling the state forward does not quickly drift away from the real trajectory.
+
+In K2VAE, this is why the measurement function matters so much. If $\psi$ is poor, then the Koopman operator is trying to model the wrong space. If $\psi$ is good, then the operator gets a much cleaner dynamical system to work with.
+
+### 4.5.1 Why the Measurement Space Matters in This Project
+
+The measurement space is where the model tries to turn a messy forecasting problem into a simpler dynamical one. That is the whole point of the Koopman-inspired design.
+
+In the raw observation space, time series can contain noise, nonlinear interactions, and variable relationships that are hard to model directly. In the learned measurement space, the model is hoping to isolate the part of the dynamics that is regular enough to be written as a transition rule.
+
+That is why the measurement function and the Koopman operator must be understood together: the function builds the space, and the operator models motion through that space.
 
 ### 4.6 Kalman Filtering and Kalman-style Refinement
 
@@ -140,7 +189,15 @@ where $w_k$ and $v_k$ are process and observation noise. The filter updates the 
 
 K2VAE does not use the classical Kalman filter exactly as written. Instead, it uses a learned Kalman-style refinement mechanism, which is why the paper calls it a KalmanNet. The model uses the structure of Kalman filtering to refine an imperfect linear system and to model uncertainty over the latent dynamics.
 
-This is crucial because the Koopman-based linearisation is only approximate. The Kalman-style step is what helps the model correct for that approximation.
+Why use KalmanNet instead of a normal Kalman filter?
+
+- A normal Kalman filter assumes that the transition and observation models are already known, or at least well specified, and that the noise is linear-Gaussian.
+- K2VAE does not have that luxury. Its latent dynamics are learned from data, the Koopman linearisation is only approximate, and the residual corrections are not something we can write down perfectly ahead of time.
+- KalmanNet replaces the fixed hand-designed parts with learnable components, so the update rule can adapt to the data rather than relying on a rigid filtering formula.
+
+That is the key reason it fits this project better than a standard Kalman filter. We do not want a filter that only works when the model is already correct. We want a learned refinement mechanism that can repair the mismatch between the approximate Koopman dynamics and the actual forecasting problem.
+
+So the KalmanNet is useful here because it keeps the filtering idea, but makes it flexible enough to be trained end-to-end with the rest of the model.
 
 ### 4.7 Variational Inference and the ELBO
 
@@ -200,6 +257,14 @@ The architecture in the paper can be understood as a pipeline with a clear conce
 
 The important conceptual point is that K2VAE does not simply learn a generic sequence-to-sequence map. It tries to learn a latent dynamical system that is both structured and probabilistic.
 
+In simpler terms, the pipeline is:
+
+- split the time series into manageable chunks;
+- turn those chunks into a latent representation;
+- learn how that latent state moves forward in time;
+- correct the learned movement with a data-driven filtering step;
+- and finally decode the refined latent state back into a forecast.
+
 The basic training objective can be written as:
 
 $$
@@ -207,6 +272,27 @@ $$
 $$
 
 where the first term handles probabilistic forecasting and the second term encourages the measurement space to become more linear and consistent with the reconstruction target.
+
+### 5.1 Roadmap in Plain Terms
+
+The roadmap from the replication notes can be summarised in a simpler way. This is the sequence of things that still need to be completed:
+
+1. **Scaffolding and data pipeline**
+   Load the time-series data correctly, split it properly, and make sure the patching step produces the expected tensor shapes.
+
+2. **KoopmanNet**
+   Learn the measurement function and the approximate linear transition in latent space.
+
+3. **KalmanNet**
+   Use the residual between the Koopman rollout and the actual latent tokens to refine the state and estimate uncertainty.
+
+4. **Decoder and ELBO**
+   Convert the latent prediction back into a forecast and train the full model end to end.
+
+5. **Metrics and sanity checks**
+   Verify CRPS and NMAE, check that the forecasts are sensible, and test the model on one small dataset before scaling up.
+
+The practical value of this roadmap is that it shows the order in which the project should be built. I should not start with the full model immediately. First I need the data shapes and patching to work, then the Koopman part, then the Kalman refinement, and only after that the full probabilistic decoder and evaluation loop.
 
 ---
 

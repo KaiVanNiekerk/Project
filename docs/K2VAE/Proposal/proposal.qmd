@@ -1,0 +1,136 @@
+---
+title: "K2VAE Project Proposal"
+author:
+  - "Kai Van Niekerk (VNKKAI001)"
+  - "Joshua Orelowitz (ORLJOS001)"
+  - "Supervisor: Jake Stangroom"
+date: today
+bibliography: references.bib
+format:
+  pdf:
+    documentclass: article
+    classoption: twocolumn
+    fontsize: 11pt
+    geometry: margin=1in
+    number-sections: true
+abstract: "This project studies K2VAE, a Koopman-Kalman enhanced variational autoencoder for probabilistic time-series forecasting. The aim is to determine whether a structured latent dynamics model can improve long-horizon forecasting by combining patch-based tokenisation, Koopman-inspired latent linearisation, KalmanNet-style refinement, and variational decoding. The project will evaluate prediction accuracy, uncertainty quality, and forecasting stability on benchmark datasets, then compare K2VAE against simpler forecasting and state-space baselines."
+---
+
+# Problem Statement
+
+Probabilistic time-series forecasting becomes difficult when the underlying process is nonlinear, noisy, and long-range dependent. In these settings, a forecasting model must do more than produce a point estimate: it must preserve uncertainty, remain stable over long horizons, and avoid compounding error as it rolls forward in time.
+
+The K2VAE paper addresses this by combining three ideas that are individually useful but more powerful together:
+
+1. A variational autoencoder that learns a probabilistic latent representation.
+2. A Koopman-inspired linearisation step that makes the latent temporal dynamics easier to model.
+3. A KalmanNet-style refinement mechanism that improves the latent state estimate and models process uncertainty.
+
+The core question for this project is whether that combination produces a forecasting model that is meaningfully better than simpler baselines on long-horizon probabilistic forecasting tasks, especially when the data contain nonlinear structure, multivariate interactions, and forecast drift. The project is therefore not just about reproducing the paper’s architecture; it is about testing whether the architectural choices give a real forecasting advantage.
+
+# Hypotheses
+
+**Primary Hypothesis:** K2VAE will outperform simpler probabilistic forecasting baselines on long-horizon prediction tasks because its latent dynamics are structured more explicitly than those of generic sequence models.
+
+**Secondary Hypothesis 1:** The Koopman-inspired measurement space will improve stability and forecasting quality by making the latent transition easier to model approximately linearly.
+
+**Secondary Hypothesis 2:** The KalmanNet-style refinement step will improve uncertainty calibration and reduce error accumulation relative to a purely Koopman-based latent rollout.
+
+**Secondary Hypothesis 3:** The full K2VAE objective, combining the ELBO with the reconstruction loss, will learn a more useful latent space than a model trained only as a deterministic forecaster.
+
+**Secondary Hypothesis 4:** The model will show the clearest advantage on longer horizons and on datasets with smoother but still nonlinear temporal structure.
+
+# Aims and Objectives
+
+The main aim of the project is to study K2VAE as a structured probabilistic forecasting model and determine whether its architecture offers a real advantage over simpler alternatives.
+
+The specific objectives are:
+
+1. Understand the K2VAE architecture at the level of its core components: patching, KoopmanNet, KalmanNet, decoder, and training objective.
+2. Implement a working version of the model or a close simplified variant that preserves the paper’s main structure.
+3. Reproduce the main forecasting behaviour reported in the paper on a small number of benchmark datasets.
+4. Compare K2VAE against simpler baselines, including a VAE-style forecaster, a recurrent or transformer-based forecaster, and a basic state-space baseline.
+5. Evaluate whether the Koopman-inspired component and KalmanNet refinement each contribute meaningfully to performance.
+6. Measure both point-forecast accuracy and probabilistic quality, including calibration and long-horizon stability.
+7. Keep the implementation staged so that each part of the model is validated before moving on to the next stage.
+
+# Literature Review
+
+Autoencoders (AEs) compress high-dimensional inputs into a lower-dimensional latent space, but that latent space is usually not structured for sampling or prediction. Variational autoencoders (VAEs) fix this by adding a probabilistic prior and optimising the Evidence Lower Bound (ELBO), which is the part of the K2VAE setup that makes the patch embeddings usable as a generative forecasting representation rather than just a deterministic feature vector [@hinton2006reducing; @kingma2014vae].
+
+VAEs alone do not model temporal evolution, so sequential extensions such as Deep State-Space Models (DSSMs), the Deep Kalman Filter (DKF), and the Kalman Variational Autoencoder (KVAE) add latent transitions and learned observation models for time-series forecasting [@krishnan2015deep; @fraccaro2017disentangled]. Their limitation is that recurrent latent dynamics can still blur the state representation and weaken long-horizon stability [@klushyn2021latent].
+
+That is where K2VAE differs. It keeps the probabilistic latent representation, but replaces the purely recurrent transition with a Koopman-inspired evolution step and a learned KalmanNet refinement stage [@k2vae2025; @kalmannet2021]. Koopman theory is useful here because it offers a way to represent nonlinear dynamics through approximately linear evolution in a learned observable space, and K2VAE uses a measurement function to map embedded patches into that space before KoopmanNet propagates them forward [@koopman2021modern].
+
+The measurement function is therefore not just another projection layer. It defines the observable space in which the latent dynamics are expected to behave more linearly, so it is the bridge between the patch embeddings and the Koopman operator [@k2vae2025].
+
+The Kalman side of the architecture is equally important. Classical Kalman filtering alternates between prediction and update, and K2VAE preserves that recursive structure while learning the correction step from data instead of assuming a closed-form system model [@kalman1960new; @jazwinski2007stochastic; @kalmannet2021].
+
+KalmanNet is the part that makes this filtering stage adaptive: it learns how to adjust the predicted latent state from the incoming observation while still following the predict-update logic that makes Kalman-style estimation stable and interpretable [@kalmannet2021].
+
+Patching then makes the whole pipeline tractable by shortening the input sequence into local chunks before embedding, which reduces sequence length while preserving local structure [@k2vae2025]. In combination, the patching, Koopman-style evolution, KalmanNet refinement, and VAE objective are what make K2VAE a distinct forecasting model rather than just another VAE for time series.
+
+# Methodology and Analysis
+
+**Repository and Collaboration:** We will maintain a shared Git repository to track code, experiments, and documentation throughout the project.
+
+**Implementation Stack (Python):**
+
+* Core modeling and training: `torch` (PyTorch) for model implementation and gradient-based training.
+
+* Numerical and probabilistic computation: `numpy` and `scipy` for matrix operations, Gaussian routines, and state-space calculations.
+
+* Data handling and experiment tracking: `pandas` for preprocessing, logs, and result tables.
+
+* Visualization and evaluation: `matplotlib` and `seaborn` for plots, and `scikit-learn` for evaluation measures such as $R^2$ where relevant.
+
+**Datasets:** Benchmarks (required): We will reproduce results on a small subset of the datasets used in the paper before scaling up to the broader benchmark family, which includes ETTh1, ETTh2, ETTm1, ETTm2, Electricity, Traffic, Exchange, Weather, and ILI. The initial goal is to verify that the model works cleanly on at least one short-horizon and one long-horizon setting before extending to the full suite.
+
+**Experimental Structure:** We will run the models in stages with fixed settings and seeds to ensure that the comparisons are controlled.
+
+**Primary Quantitative Metrics:**
+
+* Mean Squared Error (MSE) for prediction and rollout accuracy.
+
+* Normalised Mean Absolute Error (NMAE) for point-forecast performance.
+
+* Continuous Ranked Probability Score (CRPS) and calibration diagnostics for predictive uncertainty.
+
+* Long-horizon stability to assess whether the rollout remains reliable as the prediction horizon grows.
+
+**Analysis and Convergence Checks:**
+
+* Training curves showing how the objective evolves during optimisation.
+
+* Forecast trajectories comparing model outputs against ground truth.
+
+* Qualitative inspection of latent rollouts and uncertainty behaviour.
+
+**Why this analysis matters:** The project is not only about reducing forecast error. It is about testing whether a structured latent-dynamics model improves forecasting behaviour in a way that is stable, probabilistic, and strong enough to justify the added complexity.
+
+# Project Milestone Deliverables
+
+The project milestones and deliverables are summarised in @tbl-milestones, which outlines the key dates, phases, and planned outputs for each stage.
+
+\clearpage
+\begin{table*}
+\centering
+\caption{Project Timeline and Milestones}
+\label{tbl-milestones}
+\begin{tabular}{p{0.23\textwidth}p{0.23\textwidth}p{0.48\textwidth}}
+\hline
+Date & Phase & Plan \\
+\hline
+Early May 2026 & Foundation & Establish the working environment and submit the proposal. \\
+June - July 2026 & Core implementation & Build the baseline pipeline, add KoopmanNet and KalmanNet, and connect the decoder. \\
+July - August 2026 & Experiments & Run staged comparisons on the benchmark datasets and vary horizon length where feasible. \\
+Early September 2026 & Mid-year presentation & Present progress, principal findings, and principal limitations. \\
+September - October 2026 & Write-up & Refine the report, review it with the supervisor, and prepare the final submission. \\
+November 2026 & Poster presentation & Prepare and present the final poster. \\
+\hline
+\end{tabular}
+\end{table*}
+
+\clearpage
+
+# References
