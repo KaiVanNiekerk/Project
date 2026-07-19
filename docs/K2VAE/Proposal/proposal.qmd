@@ -13,7 +13,7 @@ format:
     fontsize: 11pt
     geometry: margin=1in
     number-sections: true
-abstract: "This project studies K2VAE, a Koopman-Kalman enhanced variational autoencoder for probabilistic time-series forecasting. The aim is to determine whether a structured latent dynamics model can improve long-horizon forecasting by combining patch-based tokenisation, Koopman-inspired latent linearisation, KalmanNet-style refinement, and variational decoding. The project will evaluate prediction accuracy, uncertainty quality, and forecasting stability on benchmark datasets, then compare K2VAE against simpler forecasting and state-space baselines."
+abstract: "This project studies K2VAE, a Koopman-Kalman enhanced variational autoencoder for probabilistic time-series forecasting. The aim is to determine whether a structured latent dynamics model can improve long-horizon forecasting by combining patch-based tokenisation, Koopman-inspired latent linearisation, KalmanNet-style refinement, and variational decoding. The project will evaluate prediction accuracy, uncertainty quality, and forecasting stability on benchmark datasets, then compare K2VAE against the state-of-the-art baselines used in the paper, with ablation studies if time permits."
 ---
 
 # Problem Statement
@@ -26,11 +26,11 @@ The K2VAE paper addresses this by combining three ideas that are individually us
 2. A Koopman-inspired linearisation step that makes the latent temporal dynamics easier to model.
 3. A KalmanNet-style refinement mechanism that improves the latent state estimate and models process uncertainty.
 
-The core question for this project is whether that combination produces a forecasting model that is meaningfully better than simpler baselines on long-horizon probabilistic forecasting tasks, especially when the data contain nonlinear structure, multivariate interactions, and forecast drift. The project is therefore not just about reproducing the paper’s architecture; it is about testing whether the architectural choices give a real forecasting advantage.
+The core question for this project is whether that combination produces a forecasting model that is meaningfully better than the state-of-the-art baselines reported in the paper on long-horizon probabilistic forecasting tasks, especially when the data contain nonlinear structure, multivariate interactions, and forecast drift. The project is therefore not just about reproducing the paper’s architecture; it is about testing whether the architectural choices give a real forecasting advantage.
 
 # Hypotheses
 
-**Primary Hypothesis:** K2VAE will outperform simpler probabilistic forecasting baselines on long-horizon prediction tasks because its latent dynamics are structured more explicitly than those of generic sequence models.
+**Primary Hypothesis:** K2VAE will outperform the state-of-the-art baselines used in the paper on long-horizon prediction tasks because its latent dynamics are structured more explicitly than those of generic sequence models.
 
 **Secondary Hypothesis 1:** The Koopman-inspired measurement space will improve stability and forecasting quality by making the latent transition easier to model approximately linearly.
 
@@ -42,14 +42,14 @@ The core question for this project is whether that combination produces a foreca
 
 # Aims and Objectives
 
-The main aim of the project is to study K2VAE as a structured probabilistic forecasting model and determine whether its architecture offers a real advantage over simpler alternatives.
+The main aim of the project is to study K2VAE as a structured probabilistic forecasting model and determine whether its architecture offers a real advantage over the state-of-the-art baselines used in the paper.
 
 The specific objectives are:
 
 1. Understand the K2VAE architecture at the level of its core components: patching, KoopmanNet, KalmanNet, decoder, and training objective.
 2. Implement a working version of the model or a close simplified variant that preserves the paper’s main structure.
 3. Reproduce the main forecasting behaviour reported in the paper on a small number of benchmark datasets.
-4. Compare K2VAE against simpler baselines, including a VAE-style forecaster, a recurrent or transformer-based forecaster, and a basic state-space baseline.
+4. Compare K2VAE against the state-of-the-art baselines used in the paper, with ablation studies for the K2VAE components if time permits.
 5. Evaluate whether the Koopman-inspired component and KalmanNet refinement each contribute meaningfully to performance.
 6. Measure both point-forecast accuracy and probabilistic quality, including calibration and long-horizon stability.
 7. Keep the implementation staged so that each part of the model is validated before moving on to the next stage.
