@@ -133,16 +133,99 @@ class TokenEmbedding(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # X: (B, T, N) — swDataset's native output
         Xp = patchify(x, self.patch_size)          # (B, N, s, n)
-        Xp = rearrange(Xp, "b n s p - b p (n s)") # flatten (N,s) per patch
-        Xp = self.proj(Xp)                          # (B, p, d)
-        return rearrange(Xp, "b p d -> b d p")      # (B, d, n)
+        Xp = rearrange(Xp, "B N s n -> B n (N s)") # flatten (N,s) per patch
+        Xp = self.proj(Xp)                          # (B, n, d)
+        return rearrange(Xp, "B n d -> B d n")      # (B, d, n)
+
+def test_run():
+    B, T, N = 2, 8, 3
+    s = 2
+    n = T // s
+    d = 16
+
+    # 1. Splitting
+    df = pd.DataFrame(np.random.randn(100, N))
+    train_df, val_df, test_df = split(df, train_frac=0.7, val_frac=0.15)
+    assert len(train_df) + len(val_df) + len(test_df) == len(df), \
+        f"split sizes don't sum to total: {len(train_df)}+{len(val_df)}+{len(test_df)} != {len(df)}"
+    assert len(train_df) > 0 and len(val_df) > 0 and len(test_df) > 0, "one of the splits is empty"
+
+    # 2. Scaling
+    train_scaled, val_scaled, test_scaled, scaler = scale(train_df, val_df, test_df)
+    # atol = absolute tolerance amount
+    assert np.allclose(train_scaled.mean(axis=0), 0, atol=1e-6), \
+        f"train mean not ~0: {train_scaled.mean(axis=0)}"
+    assert np.allclose(train_scaled.std(axis=0), 1, atol=1e-6), \
+        f"train std not ~1: {train_scaled.std(axis=0)}"
+
+    # 3. Sliding window dataset
+    input_window, output_window = 8, 2
+    ds = swDataset(train_scaled, input_window, output_window)
+    expected_len = len(train_scaled) - input_window - output_window + 1
+    assert len(ds) == expected_len, f"dataset len {len(ds)} != expected {expected_len}"
+
+    x_win, y_win = ds[0]
+    assert x_win.shape == (input_window, N), f"x window shape {x_win.shape} != {(input_window, N)}"
+    assert y_win.shape == (output_window, N), f"y window shape {y_win.shape} != {(output_window, N)}"
+
+    # 4. Patchify (synthetic tensor with known dims, independent of CSV)
+    x = torch.randn(B, T, N)
+    xp = patchify(x, s)
+    assert xp.shape == (B, N, s, n), f"patchify shape {xp.shape} != {(B, N, s, n)}"
+
+    # 5. Round-trip: patchify -> unpatchify should be an EXACT match (pure reshape, no float ops)
+    x_recon = unpatchify(xp, s)
+    assert torch.equal(x, x_recon), "patchify/unpatchify round-trip mismatch"
+
+    # 6. TokenEmbedding
+    embed = TokenEmbedding(num_vars=N, patch_size=s, d=d)
+    tokens = embed(x)
+    assert tokens.shape == (B, d, n), f"token embedding shape {tokens.shape} != {(B, d, n)}"
+
+    print("All sanity checks passed.")
+    print(f"  patch shape: {xp.shape}")
+    print(f"  token shape: {tokens.shape}")
+    
+def vis_test():
+    B, T, N = 1, 8, 2
+    s = 2
+
+    # x[0, t, v] = t * 10 + v, so you can read off (timestep, variable) at a glance
+    x = torch.arange(B * T * N, dtype=torch.float32).reshape(B, T, N)
+    for v in range(N):
+        x[0, :, v] = torch.arange(T) * 10 + v
+
+    print("=== Input (B, T, N) ===")
+    print(f"shape: {x.shape}")
+    print(x)
+
+    # Sliding window — show one window explicitly
+    data_np = x[0].numpy()  # (T, N), pretend this is the full series
+    input_window, output_window = 4, 2
+    ds = swDataset(data_np, input_window, output_window)
+    x_win, y_win = ds[0]
+    print("\n=== Sliding window 0 ===")
+    print(f"x (context) shape {x_win.shape}:\n{x_win}")
+    print(f"y (target) shape {y_win.shape}:\n{y_win}")
+
+    # Patchify — now operates on the CONTEXT WINDOW, not the raw full series.
+    # x_win is (input_window, N); patchify expects (B, T, N), so add the batch dim.
+    x_ctx = x_win.unsqueeze(0)  # (1, input_window, N)
+    n = input_window // s
+    xp = patchify(x_ctx, s)  # (B, N, s, n)
+    print("\n=== Patchified context window (B, N, s, n) ===")
+    print(f"shape: {xp.shape}")
+    for var in range(N):
+        print(f"-- variable {var} --")
+        for patch_idx in range(n):
+            print(f"  patch {patch_idx}: {xp[0, var, :, patch_idx].tolist()}")
+
+    # Round-trip check, visually — reconstructs the CONTEXT WINDOW, not the raw x
+    x_recon = unpatchify(xp, s)
+    print("\n=== Reconstructed context window (should match x_win) ===")
+    print(x_recon)
+    print("exact match:", torch.equal(x_ctx, x_recon))
 
 if __name__ == "__main__":
-    # Example usage
-    df = load_csv(r"datasets\electricity\electricity.csv") #raw string to get around \ errors
-    #print("great success")
-    train_df, val_df, test_df = split(df, train_frac=0.7, val_frac=0.15)
-    print(train_df)
-    train_scaled, val_scaled, test_scaled, scaler = scale(train_df, val_df, test_df)
-    print(train_scaled)
-    
+    test_run()
+    vis_test()
