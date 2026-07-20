@@ -227,5 +227,6 @@ def vis_test():
     print("exact match:", torch.equal(x_ctx, x_recon))
 
 if __name__ == "__main__":
-    test_run()
+    # Both test methods from claude, verified by author
+    test_run() 
     vis_test()
