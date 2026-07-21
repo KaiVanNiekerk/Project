@@ -73,14 +73,10 @@ class KoopmanNet(nn.Module):
             reconstruction.append(current_state.squeeze(-1)) # saving the current state for reconstruction, shape (B, d)
             current_state = torch.bmm(K, current_state)  # matrix multiplication of K and current_state to get the next state in the sequence
 
-        # Extracts the true last token from the mapped space 
-        # to prevent errors from accumulating in the prediction step, shape (B, d, 1)
-        current_state = X_p_star[:, :, -1].unsqueeze(-1)
         prediction = []
-
         for _ in range(m):
-            current_state = torch.bmm(K, current_state)
             prediction.append(current_state.squeeze(-1)) 
+            current_state = torch.bmm(K, current_state)
             
         # Stack lists back along the time dimension
         X_C_hat = torch.stack(reconstruction, dim=-1) # shape (B, d, n)
