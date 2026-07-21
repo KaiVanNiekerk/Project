@@ -37,20 +37,26 @@ class KalmanNet(nn.Module):
     def step(self, z_prev, P_prev, u_k, x_hat_H_k):
         # Batch - B
         # state_dim - d
+        # Most matrixs like A, B etc only have two dimensions so can use .T for transpose
+        # K_k however can have more and thus we use the .transpose(-1, -2)
         """
         Performs a single Kalman filter step.
 
         Args:
-            z_prev (torch.Tensor): The previous observation. Shape: (Batch, state_dim)
+            z_prev (torch.Tensor): The previous state estimate. Shape: (Batch, state_dim)
             P_prev (torch.Tensor): The previous estimate covariance. Shape: (Batch, state_dim, state_dim)
             u_k (torch.Tensor): The control input. Shape: (Batch, state_dim)
             x_hat_H_k (torch.Tensor): The predicted state estimate. Shape: (Batch, state_dim)
 
         Returns:
-            x_k (torch.Tensor): The updated state estimate. Shape: (Batch, state_dim)
+            z_k (torch.Tensor): The updated state estimate. Shape: (Batch, state_dim)
             P_k (torch.Tensor): The updated estimate covariance. Shape: (Batch, state_dim, state_dim)
         """
         Q, R = self.covariance_matrices()
+        batch_size = z_prev.shape[0]
+        # Might need to add somehting here to train on GPU?
+        # The -1s here mean dotn change that dimension, so the resulting tensor will have shape (B, d, d)
+        I = torch.eye(self.state_dim).expand(batch_size, -1, -1) # Identity matrix with dims d, d
         
         # Prediction step
         # z_hat_k = A z_{k-1} + B u_k
@@ -74,7 +80,7 @@ class KalmanNet(nn.Module):
         
         # Joseph-stabilized covariance update (Theorem 3.1, eq. 30-31):
         # P_dual_k = (I - K_k H) P_hat_k (I - K_k H)^T + K_k R K_k^T
-        I_minus_KH = I - K @ self.H
+        I_minus_KH = I - K_k @ self.H
         # Used to keep floating point errors from causing P_k to become non-symmetric or non-positive definite.
         # look eqn 30-31 in paper
         P_dual = (
@@ -86,6 +92,50 @@ class KalmanNet(nn.Module):
         
         return z_k, P_k
     
-    # Next implementation is Forward pass 
-    
+    # P_0 not defined in the paper, but it is the initial estimate covariance. I
+    # t is a hyperparameter that can be tuned based on the specific problem and data characteristics. 
+    # If not provided, it defaults to an identity matrix, indicating equal uncertainty across all state dimensions at the start.
+    def forward(self, z_0, U, x_hat_H, P_0=None):
+        """
+        Performs a sequence of Kalman filter steps.
+
+        Args:
+            z_0 (torch.Tensor): The initial state estimate. Shape: (Batch, state_dim)
+            P_0 (torch.Tensor): The initial estimate covariance. Shape: (Batch, state_dim, state_dim)
+            U (torch.Tensor): The control inputs for each time step. Shape: (Batch, state_dim, time_steps)
+            x_hat_H (torch.Tensor): The predicted state estimates for each time step. Shape: (Batch, state_dim, time_steps)
+
+        Returns:
+            Z_prime: (B, d, m) mean of Q(Z|X) = N(Z', P)
+            P: (B, m, d, d) covariance of Q(Z|X) = N(Z', P)
+        """
+        
+        batch_size = z_0.shape[0]
+        m = U.shape[-1]
+        
+        if P_0 is None:
+            # The -1s here mean dotn change that dimension, so the resulting tensor will have shape (B, d, d)
+            P_0 = torch.eye(self.state_dim).expand(batch_size, -1, -1)
+
+        z_prev, P_prev = z_0, P_0
+        z_list, P_list = [], []
+        
+        # The loop iterates over the time steps, applying the Kalman filter step
+        for k in range(m):
+            u_k = U[..., k]
+            x_hat_H_k = x_hat_H[..., k]
+            z_k, P_k = self.step(z_prev, P_prev, u_k, x_hat_H_k)
+            z_list.append(z_k)
+            P_list.append(P_k)
+            z_prev, P_prev = z_k, P_k
+
+        # torch.stack is used to combine the list of tensors into a single tensor along a new dimension, 
+        # effectively creating a time series of the state estimates and their covariances.
+        Z = torch.stack(z_list, dim=-1)   # (B, d, m)
+        P = torch.stack(P_list, dim=1)    # (B, m, d, d)
+
+        # Skip connection (eq. 22): Z' = Z + U
+        Z_prime = Z + U
+
+        return Z_prime, P
     
