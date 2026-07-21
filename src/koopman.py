@@ -88,3 +88,77 @@ class KoopmanNet(nn.Module):
 
         # Return the true mapped space, the reconstruction, and the prediction
         return X_p_star, X_C_hat, X_H_hat
+    
+# These test cases are generated from Gemini as an initial basic 
+# sanity check for the KoopmanNet class and are not an exhaustive test set     
+def test_koopman():
+    # Setup Dummy Parameters
+    B, d, n = 4, 16, 10  # Batch size, dimension, context window (patches)
+    m = 5                # Prediction horizon (patches)
+    hidden_dim = 32
+    
+    print("Initializing KoopmanNet...")
+    model = KoopmanNet(d=d, hidden_dim=hidden_dim)
+    
+    # Test Parameter Registration
+    assert isinstance(model.K_glo, nn.Parameter), "K_glo is not registered as a learning parameter."
+    assert model.K_glo.shape == (d, d), f"K_glo shape {model.K_glo.shape} != {(d, d)}"
+    
+    # Test Standard Forward Pass (Happy Path)
+    # Simulating embedded tokens from TokenEmbedding: shape (B, d, n)
+    X_p_prime = torch.randn(B, d, n) 
+    
+    X_p_star, X_C_hat, X_H_hat = model(X_p_prime, m)
+    
+    # Assert output shapes
+    assert X_p_star.shape == (B, d, n), f"X_p_star shape {X_p_star.shape} != {(B, d, n)}"
+    assert X_C_hat.shape == (B, d, n), f"X_C_hat shape {X_C_hat.shape} != {(B, d, n)}"
+    assert X_H_hat.shape == (B, d, m), f"X_H_hat shape {X_H_hat.shape} != {(B, d, m)}"
+    
+    # Test NaN Fallback Mechanism (Edge Case)
+    # Feeding a tensor of all zeros will cause least squares to struggle 
+    # or create a zeroed local operator, testing our identity fallback.
+    X_garbage = torch.full((B, d, n), 1e30) 
+    X_p_star_bad, X_C_hat_bad, X_H_hat_bad = model(X_garbage, m)
+    
+    assert X_p_star_bad.shape == (B, d, n), "Fallback failed: X_p_star shape mismatch on garbage data."
+    assert not torch.isnan(X_C_hat_bad).all(), "Fallback failed: Reconstruction is entirely NaNs."
+    
+    # Gradient Flow Sanity Check
+    # Ensure the model can actually backpropagate without breaking
+    loss = X_H_hat.sum()
+    loss.backward()
+    assert model.K_glo.grad is not None, "Gradients are not flowing back to K_glo!"
+
+    # Orthogonality Check
+    # Verify that K_glo initialized via SVD is actually orthogonal
+    identity = torch.eye(d)
+    k_glo_transpose = model.K_glo.t()
+    k_k_t = torch.mm(model.K_glo, k_glo_transpose)
+    assert torch.allclose(k_k_t, identity, atol=1e-5), "K_glo is not initialized as an orthogonal matrix!"
+    
+    # Batch Independence Check
+    # Ensure that data from one sequence doesn't bleed into another sequence in the batch
+    model.eval()  # Disable Dropout for this check to ensure deterministic behavior
+    
+    X_baseline = torch.randn(B, d, n)
+    _, _, H_baseline = model(X_baseline, m)
+    
+    # Modify ONLY the first sample in the batch
+    X_modified = X_baseline.clone()
+    X_modified[0] = X_modified[0] + 10.0 
+    
+    _, _, H_modified = model(X_modified, m)
+    
+    # Assert that the outputs for the OTHER samples remain identical
+    assert torch.equal(H_baseline[1:], H_modified[1:]), "Batch cross-talk detected! Samples are affecting each other."
+    
+    model.train() # Put it back into training mode just in case
+
+    print("All KoopmanNet sanity checks passed.")
+    print(f"  Input shape:       {X_p_prime.shape}")
+    print(f"  Reconstruct shape: {X_C_hat.shape}")
+    print(f"  Prediction shape:  {X_H_hat.shape}")
+
+if __name__ == "__main__":
+    test_koopman()
