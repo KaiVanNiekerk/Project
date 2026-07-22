@@ -46,11 +46,11 @@ class KoopmanNet(nn.Module):
         X_p_star = rearrange(X_p_star, 'b n d -> b d n')
 
         # Get local operator, uses one-step extended Dynamic Mode Decomposition (eDMD) 
-        # to find the line of best fit representing the system's dynamics for this specific batch
+        # to find the line of best fit representing the system's dynamics for each specific batch
         X_back = X_p_star[:, :, :-1]  # (B, d, n-1), the past, all patches except the last one
         X_forward = X_p_star[:, :, 1:]  # (B, d, n-1), the future, all patches except the first one
 
-        # Solve X_back^T * K^T = X_fore^T, then transpose the result (this is to follow the conventiion of the original paper)
+        # Solve X_back^T * K^T = X_fore^T, then transpose the result (this is to follow the convention of the original paper)
         X_back_T = X_back.transpose(1, 2)  # (B, n-1, d)
         X_forward_T = X_forward.transpose(1, 2)  # (B, n-1, d)
         K_loc_T = torch.linalg.lstsq(X_back_T, X_forward_T).solution # (B, d, d), this is faster and more numerically stable than using the pseudo-inverse
@@ -64,7 +64,8 @@ class KoopmanNet(nn.Module):
         if torch.isnan(K).any():
             K = torch.eye(d, device=K.device).unsqueeze(0).repeat(B, 1, 1)
 
-        # Reconstruction and prediction of state transitions 
+        # Reconstruction and prediction of state transitions starting from the first token 
+        # in the sequence and iteratively applying the Koopman operator to generate future states
         current_state = X_p_star[:, :, 0].unsqueeze(-1) # first token, shape (B, d, 1) adjusted to have the correct shape for matrix multiplication with K
         reconstruction = []
 
@@ -73,12 +74,14 @@ class KoopmanNet(nn.Module):
             reconstruction.append(current_state.squeeze(-1)) # saving the current state for reconstruction, shape (B, d)
             current_state = torch.bmm(K, current_state)  # matrix multiplication of K and current_state to get the next state in the sequence
 
+        # This is the forecasted prediction of future states
+        # starting from the last reconstructed state
         prediction = []
         for _ in range(m):
             prediction.append(current_state.squeeze(-1)) 
             current_state = torch.bmm(K, current_state)
             
-        # Stack lists back along the time dimension
+        # Stack lists back along the time dimension, we will later use these for loss calculations and evaluation
         X_C_hat = torch.stack(reconstruction, dim=-1) # shape (B, d, n)
         X_H_hat = torch.stack(prediction, dim=-1)     # shape (B, d, m)
 
