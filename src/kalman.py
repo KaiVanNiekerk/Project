@@ -30,8 +30,8 @@ class KalmanNet(nn.Module):
         L_Q = torch.tril(self.L_Q_raw)
         L_R = torch.tril(self.L_R_raw)
         # Ensure positive definiteness of Q and R by constructing them from lower triangular matrices
-        Q = L_Q @ L_Q.T
-        R = L_R @ L_R.T
+        Q = L_Q @ L_Q.T # uncertainity in z_k?
+        R = L_R @ L_R.T # How nosiy do I assume y_k (x_hat_k this is koopmans rollout) is
         return Q, R
     
     def step(self, z_prev, P_prev, u_k, x_hat_H_k):
@@ -135,6 +135,13 @@ class KalmanNet(nn.Module):
         P = torch.stack(P_list, dim=1)    # (B, m, d, d)
 
         # Skip connection (eq. 22): Z' = Z + U
+        # Happens to ensure that the non linear dynamics captured in U that koopman missed are not neglected
+        # by the model and thus still contribute to the final prediction to help koopman net learn the non linear dynamics better.
+        # It is added after the loop to ensure that the U's dont affect the covariance matrices P, 
+        # which are meant to capture the uncertainty in the state estimates Z.
+        # Over tiem as koopman net gets better X_res tends to 0 and thus so does U.
+        # Adding it bakc here stops the kalman gain from eroding the non linearity. 
+        # (as  kalman gain eahc step actiuve pulls us towards the prediction pulling us away from the non linearity not captured)
         Z_prime = Z + U
 
         return Z_prime, P
