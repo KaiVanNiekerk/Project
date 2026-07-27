@@ -28,6 +28,8 @@ class Integrator(nn.Module):
         self.m = m
  
         # adaptation: project measurement dim -> transformer working dim
+        # Makes similar rows of observations more similar and pushes dissimilar rows of observations further apart in the transformer working dimension
+        # Allowing us to see patterns in the context window more easily
         self.adaptation = nn.Linear(d, d_model)
         
         # Encoder: stack of transformer encoder layers to process the adapted input sequence
