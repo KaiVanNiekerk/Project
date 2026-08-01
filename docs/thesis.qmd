@@ -1,0 +1,114 @@
+---
+title: "Thesis Plan"
+bibliography: K2VAE/Proposal/references.bib
+date: today
+format:
+  pdf:
+    documentclass: book
+    classoption: oneside
+    fontsize: 11pt
+abstract: "This project studies K2VAE, a Koopman-Kalman enhanced variational autoencoder for probabilistic time-series forecasting. The aim is to determine whether a structured latent dynamics model can improve long-horizon forecasting by combining patch-based tokenisation, Koopman-inspired latent linearisation, KalmanNet-style refinement, and variational decoding. The project will evaluate prediction accuracy, uncertainty quality, and forecasting stability on benchmark datasets, then compare K2VAE against the state-of-the-art baselines used in the paper, with ablation studies if time permits."
+---
+
+5 chapters
+
+- Intro (last)
+
+	- Problem statement
+
+	- Lit rev
+
+	- Chapter outline
+
+- Prelims
+
+	- All theory we need to introduce methodology
+
+	- Koopman(small summary of idea if easy then break down why useful to us, Koopman operator etc etc)
+
+	- Integrator 
+
+ 	- Kalman
+
+	- VAE 
+
+	- MAYBE: Other models
+
+- Methodology / K2-model
+
+	- What s this model, what are we actually doing here (model specific stuff)
+
+	- Architecture
+
+	- Pre processing (Prepare for model)
+
+	- All stuff we need to implement to make model work
+
+- Results + Experiments
+
+	- Preprocessing (Data cleaning) talk about format
+
+	- Hyper parameter tuning what we use show some graphs
+
+	- Actual results and experiments
+
+	- MAYBE: Other models
+
+	- Ablations
+
+* Conclusion 
+
+  * Conclusion (Summary of what we did and what main results were)
+  * Offer recommendation
+  * Limitations
+  * Future work
+
+## Introduction
+
+### Problem Statement
+
+Probabilistic time-series forecasting becomes difficult when the underlying process is nonlinear, noisy, and long-range dependent. In these settings, a forecasting model must do more than produce a point estimate: it must preserve uncertainty, remain stable over long horizons, and avoid compounding error as it rolls forward in time.
+
+The K2VAE paper addresses this by combining three ideas that are individually useful but more powerful together:
+
+1. A variational autoencoder that learns a probabilistic latent representation.
+2. A Koopman-inspired linearisation step that makes the latent temporal dynamics easier to model.
+3. A KalmanNet-style refinement mechanism that improves the latent state estimate and models process uncertainty.
+
+The core question for this project is whether that combination produces a forecasting model that is meaningfully better than the state-of-the-art baselines reported in the paper on long-horizon probabilistic forecasting tasks, especially when the data contain nonlinear structure, multivariate interactions, and forecast drift. The project is therefore not just about reproducing the paper’s architecture; it is about testing whether the architectural choices give a real forecasting advantage.
+
+## Methodology
+
+**Repository and Collaboration:** We will maintain a shared Git repository to track code, experiments, and documentation throughout the project.
+
+**Implementation Stack (Python):**
+
+* Core modeling and training: `torch` (PyTorch) for model implementation and gradient-based training.
+
+* Numerical and probabilistic computation: `numpy` and `scipy` for matrix operations, Gaussian routines, and state-space calculations.
+
+* Data handling and experiment tracking: `pandas` for preprocessing, logs, and result tables.
+
+* Visualization and evaluation: `matplotlib` and `seaborn` for plots, and `scikit-learn` for evaluation measures such as $R^2$ where relevant.
+
+**Datasets:** Benchmarks (required): We will reproduce results on a small subset of the datasets used in the paper before scaling up to the broader benchmark family, which includes ETTh1, ETTh2, ETTm1, ETTm2, Electricity, Traffic, Exchange, Weather, and ILI. The initial goal is to verify that the model works cleanly on at least one short-horizon and one long-horizon setting before extending to the full suite.
+
+**Experimental Structure:** We will run the models in stages with fixed settings and seeds to ensure that the comparisons are controlled.
+
+**Primary Quantitative Metrics:**
+
+* Mean Squared Error (MSE) for prediction and rollout accuracy.
+
+* Normalised Mean Absolute Error (NMAE) for point-forecast performance.
+
+* Continuous Ranked Probability Score (CRPS) and calibration diagnostics for predictive uncertainty.
+
+* Long-horizon stability to assess whether the rollout remains reliable as the prediction horizon grows.
+
+**Analysis and Convergence Checks:**
+
+* Training curves showing how the objective evolves during optimisation.
+
+* Forecast trajectories comparing model outputs against ground truth.
+
+* Qualitative inspection of latent rollouts and uncertainty behaviour.
