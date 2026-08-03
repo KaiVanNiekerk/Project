@@ -6,3 +6,262 @@ import wandb
  
 from elbo import total_loss
 
+class Trainer:
+    """
+    Orchestrates training for K2VAE.
+ 
+    Owns: model, optimizer, dataloaders, lambda_rec, early-stop state,
+    checkpoint policy. Does NOT own loss math (elbo.py) or the forward
+    pass (K2VAE), those stay independent so they can be tested in
+    isolation.
+ 
+    Expects each batch from train_loader / val_loader to be a tuple
+    (X_C, X_H) where:
+    NEED TO HANDLE DIMENSIONS HERE as preprocessing spits out b n d currently:
+        X_C : (Batch, input_dim, n) -> raw, patched+flattened context window
+        X_H : (Batch, input_dim, m) -> raw, patched+flattened horizon window
+              (same flattening as X_C, since mu/sigma from decoder_mu /
+              decoder_sigma live in that same input_dim space, NOT
+              X_H_hat, which is Koopman's measurement-space rollout)
+    """
+    def __init__(self,
+        model: torch.nn.Module,
+        optimizer: torch.optim.Optimizer,
+        train_loader,
+        val_loader,
+        lambda_rec: float = 1.0,
+        device: str = "cpu",
+        patience: int = 10,
+        checkpoint_dir: str = "checkpoints",
+        checkpoint_name: str = "k2vae_best.pt",
+        grad_clip_norm: float = 1.0,
+        use_wandb: bool = True,
+        seed: int = 0):
+        
+        self.model = model.to(device)
+        self.optimizer = optimizer
+        self.train_loader = train_loader
+        self.val_loader = val_loader
+        self.lambda_rec = lambda_rec
+        self.device = device
+        self.patience = patience
+        self.grad_clip_norm = grad_clip_norm
+        self.use_wandb = use_wandb
+        self.seed = seed
+        
+        os.makedirs(checkpoint_dir, exist_ok=True)
+        self.checkpoint_path = os.path.join(checkpoint_dir, checkpoint_name)
+ 
+        # Early stopping / checkpoint state, both driven off the same
+        # criterion (val total loss) so "best model saved" and "reason we
+        # stopped" can never disagree with each other.
+        self.best_val_loss = float("inf")
+        self.best_epoch = -1
+        self.epochs_since_improvement = 0
+        self.nan_batches_skipped = 0 # Diagnostic
+        
+        # Actual training loop
+        def fit(self, maxEpochs: int):
+            for epoch in range(1, maxEpochs + 1):
+                train_metrics = self._train_epoch(epoch)
+                val_metrics = self._validate(epoch)
+ 
+                if self.use_wandb:
+                    wandb.log(
+                        {
+                            #  Track what is happening in the training loop, including epoch number and metrics for both train and validation sets
+                            "epoch": epoch,
+                            **{f"train_{k}": v for k, v in train_metrics.items()},
+                            **{f"val_{k}": v for k, v in val_metrics.items()},
+                            "nan_batches_skipped_total": self.nan_batches_skipped,
+                        }
+                    )
+                
+                # Checks this epochs validation loss against best so far, and updates the best model if this epoch is an improvement. 
+                # Also checks for early stopping conditions based on the number of epochs since the last improvement.
+                improved = self._checkpoint_step(val_metrics["total"], epoch)
+                stop = self._early_stop_step(improved)
+    
+                if stop:
+                    print(
+                        f"Early stopping at epoch {epoch} "
+                        f"(best epoch {self.best_epoch}, "
+                        f"best val loss {self.best_val_loss:.6f})"
+                    )
+                    break
+    
+            return {
+                "best_epoch": self.best_epoch,
+                "best_val_loss": self.best_val_loss,
+                "nan_batches_skipped": self.nan_batches_skipped,
+            }
+            
+    # training loop for a single epoch, returns the average metrics for the epoch
+    def _train_epoch(self, epoch: int) -> dict:
+        self.model.train()
+        running = {"total": 0.0, "elbo": 0.0, "nll": 0.0, "kl": 0.0, "rec": 0.0}
+        n_batches = 0
+        
+        for X_C, X_H in self.train_loader:
+            X_C = X_C.to(self.device)
+            X_H = X_H.to(self.device)
+ 
+            # Wrapped because MultivariateNormal's Cholesky decomposition
+            # (used inside kl_divergence_gaussian and K2VAE.reparameterize)
+            # raises RuntimeError rather than returning NaN when P loses
+            # positive-definiteness, an isfinite() check alone never
+            # sees this, it just crashes the run.
+            try:
+                X_Rec, mu, sigma, Z_prime, P = self.model(X_C)
+ 
+                losses = total_loss(
+                    X_H=X_H,
+                    mu=mu,
+                    sigma=sigma,
+                    Z_prime=Z_prime,
+                    P=P,
+                    X_C=X_C,
+                    X_Rec=X_Rec,
+                    lambda_rec=self.lambda_rec,
+                )
+                loss = losses["total"]
+            except RuntimeError as e:
+                self.nan_batches_skipped += 1
+                print(f"[train] skipped batch: {type(e).__name__}: {e}")
+                continue
+ 
+            if not torch.isfinite(loss):
+                # Skip the optimizer step, not the whole epoch. A handful
+                # of bad batches shouldn't corrupt the run, but repeated
+                # occurrences should stay visible via the counter.
+                self.nan_batches_skipped += 1
+                continue
+ 
+            self.optimizer.zero_grad() # ensures that each epoch gradient is computed independently, preventing accumulation from previous epochs
+            loss.backward() # Computes gradients
+            # Caps gradient spikes for stability, preventing exploding gradients that can destabilize training.
+            torch.nn.utils.clip_grad_norm_(
+                self.model.parameters(), max_norm=self.grad_clip_norm
+            )
+            self.optimizer.step() # step forward
+    
+            # Bookkeeping
+            for k in running:
+                running[k] += losses[k].item()
+            n_batches += 1
+ 
+        n_batches = max(n_batches, 1)  # guard against an all-NaN epoch (Xero div)
+        return {k: v / n_batches for k, v in running.items()} # returns the average metrics for the epoch
+    
+    # Validation loop for a single epoch, returns the average metrics for the epoch
+    @torch.no_grad() # disables gradient computation for the validation loop, reducing memory usage and speeding up inference since gradients are not needed during evaluation.
+    def _validate(self, epoch: int) -> dict:
+        self.model.eval()
+        running = {"total": 0.0, "elbo": 0.0, "nll": 0.0, "kl": 0.0, "rec": 0.0}
+        n_batches = 0
+ 
+        for X_C, X_H in self.val_loader:
+            X_C = X_C.to(self.device)
+            X_H = X_H.to(self.device)
+ 
+            try:
+                X_Rec, mu, sigma, Z_prime, P = self.model(X_C)
+ 
+                losses = total_loss(
+                    X_H=X_H,
+                    mu=mu,
+                    sigma=sigma,
+                    Z_prime=Z_prime,
+                    P=P,
+                    X_C=X_C,
+                    X_Rec=X_Rec,
+                    lambda_rec=self.lambda_rec,
+                )
+            except RuntimeError as e:
+                print(f"[val] skipped batch: {type(e).__name__}: {e}")
+                continue
+ 
+            if not torch.isfinite(losses["total"]):
+                continue
+ 
+            for k in running:
+                running[k] += losses[k].item()
+            n_batches += 1
+ 
+        n_batches = max(n_batches, 1)
+        return {k: v / n_batches for k, v in running.items()}
+    
+    # Checkpoints
+    def _checkpoint_step(self, val_total_loss: float, epoch: int) -> bool:
+        improved = val_total_loss < self.best_val_loss
+        if improved:
+            self.best_val_loss = val_total_loss
+            self.best_epoch = epoch
+            torch.save(
+                {
+                    "epoch": epoch,
+                    "model_state_dict": self.model.state_dict(),
+                    "optimizer_state_dict": self.optimizer.state_dict(),
+                    "lambda_rec": self.lambda_rec,
+                    "val_total_loss": val_total_loss,
+                    "torch_rng_state": torch.get_rng_state(),
+                    "numpy_rng_state": np.random.get_state(),
+                    "python_rng_state": random.getstate(),
+                    "seed": self.seed,
+                },
+                self.checkpoint_path,
+            )
+        return improved
+ 
+    def _early_stop_step(self, improved: bool) -> bool:
+        if improved:
+            self.epochs_since_improvement = 0
+        else:
+            self.epochs_since_improvement += 1
+        return self.epochs_since_improvement > self.patience
+    
+
+# Minimal wandb-sweep entry point. lambda_rec is pulled from
+# wandb.config rather than hardcoded, since it's a sweep parameter.
+#
+# Chat to kai about this beofre creating but this is what sweep would look like.
+# Sweep config (save separately as sweep.yaml):
+#
+#   method: bayes
+#   metric:
+#     name: val_total
+#     goal: minimize
+#   parameters:
+#     lambda_rec:
+#       min: 0.01
+#       max: 10.0
+#       distribution: log_uniform_values
+# --------------------------------------------------------------------
+ 
+def run_sweep_trial(build_model_fn, train_loader, val_loader, device="cpu"):
+    """
+    build_model_fn: callable -> (model, optimizer). Kept as an injected
+    function rather than constructed here, since K2VAE's constructor
+    args (input_dim, d, m, n, integrator_args) are experiment-specific
+    and shouldn't be hardcoded into the Trainer.
+    """
+    wandb.init()
+    config = wandb.config
+ 
+    model, optimizer = build_model_fn()
+ 
+    trainer = Trainer(
+        model=model,
+        optimizer=optimizer,
+        train_loader=train_loader,
+        val_loader=val_loader,
+        lambda_rec=config.lambda_rec,
+        device=device,
+        patience=config.get("patience", 10),
+        grad_clip_norm=config.get("grad_clip_norm", 1.0),
+        use_wandb=True,
+        checkpoint_name=f"k2vae_lambda{config.lambda_rec:.4f}.pt",
+    )
+ 
+    result = trainer.fit(max_epochs=config.get("max_epochs", 100))
+    wandb.log({"final_best_val_loss": result["best_val_loss"]})

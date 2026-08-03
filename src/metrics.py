@@ -1,3 +1,6 @@
+# Not optimised againts just used to evaluate at the end of training. 
+# The metrics are used to evaluate the model's performance on the test set after training is complete.
+# They are not used during training, so they do not affect the model's learning process.
 import torch
 
 
