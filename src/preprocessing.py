@@ -112,30 +112,15 @@ def unpatchify(x: torch.Tensor, patch_size: int) -> torch.Tensor:
     # output shape: (batch_size (B), input_window (T), num_features (N)), where T = n * S
     return rearrange(x, 'B N s n -> B (n s) N', s=patch_size)
 
-"""
-    Have to make this make sense...
-    This class is used to project our inputs into the required output values for our K^2. 
-    We make use of a NN to do this projection.
-    This will be used to project the flattened patches into a d-dimensional space, which is suitable for input to a transformer model.
-    Additionally this d is chosen by use as a hyper parameter and the linear combination of the raw values learned through back prop.
-    For example this allows us to have variable numbers in out datasets as they are always 
-    forced into n meaningful patches of d numbers which will then be feed into the K^2VAE
-"""
-class TokenEmbedding(nn.Module):
-    # Initialise and project NN,
-    # d (We must decide its value) is the desired embedding dimension
-    # num_vars * patch size is number of inputs
-    def __init__(self, num_vars: int, patch_size: int, d: int):
-        super().__init__() # must initalising super as to define necessary dicts for NN to work.
-        self.patch_size = patch_size
-        self.proj = nn.Linear(num_vars * patch_size, d) # creation of NN
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # X: (B, T, N) — swDataset's native output
-        Xp = patchify(x, self.patch_size)          # (B, N, s, n)
-        Xp = rearrange(Xp, "B N s n -> B n (N s)") # flatten (N,s) per patch
-        Xp = self.proj(Xp)                          # (B, n, d)
-        return rearrange(Xp, "B n d -> B d n")      # (B, d, n)
+def k2vae_integration(window: torch.Tensor, patch_size: int) -> torch.Tensor:
+    """
+    Patchifies and flattens a window (context or horizon) without projecting it.
+    Input shape: (B, Time, N)
+    Output shape: (B, input_dim, patches) where input_dim = N * s
+    """
+    p = patchify(window, patch_size)  # (B, N, s, p)
+    # Flattens N and s into input_dim, and moves patches to the last dimension
+    return rearrange(p, "B N s p -> B (N s) p")
 
 def test_run():
     B, T, N = 2, 8, 3
@@ -178,13 +163,13 @@ def test_run():
     assert torch.equal(x, x_recon), "patchify/unpatchify round-trip mismatch"
 
     # 6. TokenEmbedding
-    embed = TokenEmbedding(num_vars=N, patch_size=s, d=d)
-    tokens = embed(x)
-    assert tokens.shape == (B, d, n), f"token embedding shape {tokens.shape} != {(B, d, n)}"
+    #embed = TokenEmbedding(num_vars=N, patch_size=s, d=d)
+    #tokens = embed(x)
+    #assert tokens.shape == (B, d, n), f"token embedding shape {tokens.shape} != {(B, d, n)}"
 
     print("All sanity checks passed.")
     print(f"  patch shape: {xp.shape}")
-    print(f"  token shape: {tokens.shape}")
+    #print(f"  token shape: {tokens.shape}")
     
 def vis_test():
     B, T, N = 1, 8, 2
