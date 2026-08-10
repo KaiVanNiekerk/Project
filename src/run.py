@@ -15,8 +15,12 @@ def main():
     BATCH_SIZE = 32
     LR = 1e-3
     MAX_EPOCHS = 100
-    DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-
+    # Hardcoded to CPU for now. kalman.py's step() creates tensors with
+    # torch.eye(...) without a device= arg (I, jitter, etc.), so anything
+    # that ends up on GPU would silently mismatch device with self.A/H/B and
+    # crash. Flip this once that's fixed, see RoadMap.md checklist.
+    DEVICE = "cpu"
+    # DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
     # ---- data ----
     cli = CLI(datasets_dir="datasets")
     train_loader, val_loader, test_loader = cli.load(
