@@ -76,7 +76,12 @@ class KalmanNet(nn.Module):
         # z_k = z_hat_k + K_k (x_hat_H_k - H z_hat_k)
         # take my prediction and correct it with the new measurement, weighted by how much we trust the measurement (K_k)
         y_hat = z_hat @ self.H.T
-        z_k = z_hat + (x_hat_H_k - y_hat) @ K_k.transpose(-1, -2) # Next prediction
+        # Cant just do a normal @ multiply here as it was outputting a B, d, d creating a new dimension owing to
+        # a 2D matrix being multiplied by a 3D one thus we add on an extra 1 to enforce the correct shape and then squeeze it back down to B, d
+        residual = (x_hat_H_k - y_hat).unsqueeze(-1)          # (B, d, 1)
+        # We use bmn because we want to multiply multiple samples in parallel, and the last two dimensions are the ones we want to multiply (d, d) @ (d, 1)
+        correction = torch.bmm(K_k, residual).squeeze(-1)     # (B, d)
+        z_k = z_hat + correction # Next prediction
         
         # Joseph-stabilized covariance update (Theorem 3.1, eq. 30-31):
         # P_dual_k = (I - K_k H) P_hat_k (I - K_k H)^T + K_k R K_k^T

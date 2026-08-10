@@ -61,40 +61,40 @@ class Trainer:
         self.nan_batches_skipped = 0 # Diagnostic
         
         # Actual training loop
-        def fit(self, maxEpochs: int):
-            for epoch in range(1, maxEpochs + 1):
-                train_metrics = self._train_epoch(epoch)
-                val_metrics = self._validate(epoch)
+    def fit(self, maxEpochs: int):
+        for epoch in range(1, maxEpochs + 1):
+            train_metrics = self._train_epoch(epoch)
+            val_metrics = self._validate(epoch)
  
-                if self.use_wandb:
-                    wandb.log(
-                        {
-                            #  Track what is happening in the training loop, including epoch number and metrics for both train and validation sets
-                            "epoch": epoch,
-                            **{f"train_{k}": v for k, v in train_metrics.items()},
-                            **{f"val_{k}": v for k, v in val_metrics.items()},
-                            "nan_batches_skipped_total": self.nan_batches_skipped,
-                        }
-                    )
+            if self.use_wandb:
+                wandb.log(
+                    {
+                         #  Track what is happening in the training loop, including epoch number and metrics for both train and validation sets
+                        "epoch": epoch,
+                        **{f"train_{k}": v for k, v in train_metrics.items()},
+                        **{f"val_{k}": v for k, v in val_metrics.items()},
+                        "nan_batches_skipped_total": self.nan_batches_skipped,
+                    }
+                )
                 
-                # Checks this epochs validation loss against best so far, and updates the best model if this epoch is an improvement. 
-                # Also checks for early stopping conditions based on the number of epochs since the last improvement.
-                improved = self._checkpoint_step(val_metrics["total"], epoch)
-                stop = self._early_stop_step(improved)
+            # Checks this epochs validation loss against best so far, and updates the best model if this epoch is an improvement. 
+            # Also checks for early stopping conditions based on the number of epochs since the last improvement.
+            improved = self._checkpoint_step(val_metrics["total"], epoch)
+            stop = self._early_stop_step(improved)
     
-                if stop:
-                    print(
-                        f"Early stopping at epoch {epoch} "
-                        f"(best epoch {self.best_epoch}, "
-                        f"best val loss {self.best_val_loss:.6f})"
-                    )
-                    break
+            if stop:
+                print(
+                    f"Early stopping at epoch {epoch} "
+                    f"(best epoch {self.best_epoch}, "
+                    f"best val loss {self.best_val_loss:.6f})"
+                )
+                break
     
-            return {
-                "best_epoch": self.best_epoch,
-                "best_val_loss": self.best_val_loss,
-                "nan_batches_skipped": self.nan_batches_skipped,
-            }
+        return {                
+            "best_epoch": self.best_epoch,
+            "best_val_loss": self.best_val_loss,
+            "nan_batches_skipped": self.nan_batches_skipped,
+        }
             
     # training loop for a single epoch, returns the average metrics for the epoch
     def _train_epoch(self, epoch: int) -> dict:
@@ -263,5 +263,5 @@ def run_sweep_trial(build_model_fn, train_loader, val_loader, device="cpu"):
         checkpoint_name=f"k2vae_lambda{config.lambda_rec:.4f}.pt",
     )
  
-    result = trainer.fit(max_epochs=config.get("max_epochs", 100))
+    result = trainer.fit(maxEpochs=config.get("max_epochs", 100))
     wandb.log({"final_best_val_loss": result["best_val_loss"]})

@@ -50,7 +50,7 @@ def kl_divergence_gaussian(Z_prime: torch.Tensor, P: torch.Tensor, reduction: st
     Q = MultivariateNormal(loc=Z_prime_T, covariance_matrix=P + jitter)
     
     prior_mean = torch.zeros_like(Z_prime_T)
-    prior_cov = torch.eye(d, device=P.device).expand(B, d, d)
+    prior_cov = torch.eye(d, device=P.device).expand(B, m, d, d)
     prior = MultivariateNormal(loc=prior_mean, covariance_matrix=prior_cov)
 
     kl_per_step = kl_divergence(Q, prior)   # (B, m)
