@@ -65,7 +65,9 @@ class Trainer:
         for epoch in range(1, maxEpochs + 1):
             train_metrics = self._train_epoch(epoch)
             val_metrics = self._validate(epoch)
- 
+            #Logging
+            print(f"epoch {epoch}: train_loss={train_metrics['total']:.4f}, val_loss={val_metrics['total']:.4f}")
+            
             if self.use_wandb:
                 wandb.log(
                     {
