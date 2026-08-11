@@ -14,7 +14,7 @@ def main():
     HIDDEN_DIM = 128
     BATCH_SIZE = 32
     LR = 1e-3
-    MAX_EPOCHS = 100
+    MAX_EPOCHS = 4
     # Hardcoded to CPU for now. kalman.py's step() creates tensors with
     # torch.eye(...) without a device= arg (I, jitter, etc.), so anything
     # that ends up on GPU would silently mismatch device with self.A/H/B and
@@ -50,7 +50,7 @@ def main():
         use_wandb=False,
     )
 
-    result = trainer.fit(max_epochs=MAX_EPOCHS)
+    result = trainer.fit(maxEpochs=MAX_EPOCHS)
     print(result)
 
 
