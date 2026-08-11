@@ -77,6 +77,56 @@ The K2VAE paper addresses this by combining three ideas that are individually us
 
 The core question for this project is whether that combination produces a forecasting model that is meaningfully better than the state-of-the-art baselines reported in the paper on long-horizon probabilistic forecasting tasks, especially when the data contain nonlinear structure, multivariate interactions, and forecast drift. The project is therefore not just about reproducing the paper’s architecture; it is about testing whether the architectural choices give a real forecasting advantage.
 
+## Prelinaries
+
+### Koopman Theory
+
+Time series forecasting is often difficult because the underlying dynamics are noisy, complex, and often nonlinear, as shown by the following state transition function $f$ that maps the current state $x_k$ to the next state $x_{k+1}$:
+
+$$
+x_{k+1} = f(x_k)
+$$
+
+The issue arises as our prediction horizon grows, resulting in compounding error and drift. Koopman theory provides a way to linearise the dynamics by mapping the finite-dimensional nonlinear state space into a higher infinite-dimensional space where the evolution is linear, which is characterised via a measurement function. This is achieved through the Koopman operator, which acts on observable functions of the state rather than the state itself:
+
+$$
+\psi(x_{k+1}) = \psi(f(x_k)) = \mathcal{K} \circ \psi(x_k)
+$$
+
+The advantage of the Koopman operator is that it allows us to model the system's evolution linearly in our transformed space, even if our original system is nonlinear. As a result, we can use linear techniques to predict more stable and accurate forecasts over longer horizons. 
+
+A key challenge when applying Koopman theory is that the true Koopman operator is infinite-dimensional, necessitating a finite-dimensional approximation. Measurement functions act as observables that extract specific properties from the system's state. Manually defining a finite set of these functions to perfectly linearise complex dynamics is notoriously difficult. Therefore, rather than relying on fixed basis functions, we use a parameterised neural network to jointly learn the optimal measurement function $\psi$ and the Koopman operator $\mathcal{K}$ directly from the data. This allows the model to learn the optimal transformation and apply it to the raw patches, mapping them into a latent measurement space. By linearising the latent dynamics, we establish a structured, predictable environment that makes subsequent state estimation and uncertainty modeling mathematically tractable:
+
+$$
+X^{P*} = \psi(X^{P'})
+$$
+
+To apply our linear transition rule during training, we utilize extended Dynamic Mode Decomposition (eDMD) to learn the Koopman operator $\mathcal{K}$ from the transformed latent states. Given our projected latent states or tokens $X^{P*}$ as well as a sequence of mapped temporal data, we separate the sequence into two matrices. These matrices represent the past and the future (shifted by one time step) and are used to learn the linear transition rule in the latent space. The past matrix $X_{back}^{P*}$ contains all but the last token, while the future matrix $X_{fore}^{P*}$ contains all but the first token:
+
+$$
+X_{back}^{P*} = [x_1^{P*}, x_2^{P*}, \dots, x_{n-1}^{P*}]
+$$
+
+$$
+X_{fore}^{P*} = [x_2^{P*}, x_3^{P*}, \dots, x_n^{P*}]
+$$
+
+From this, we can extract the local Koopman operator $\mathcal{K}_{loc}$ that best maps the past to the future in the latent space by computing the Moore-Penrose pseudoinverse of the past matrix and multiplying it by the future matrix, which is equivalent to solving a least-squares problem:
+
+$$
+\mathcal{K}_{loc} = X_{fore}^{P*} (X_{back}^{P*})^\dagger
+$$
+
+This local Koopman operator $\mathcal{K}_{loc}$ is used to capture the local transition rule in the current measurement space; however, relying solely on this can result in numerical instability and incorrect convergence. To address this, we introduce a global Koopman operator $\mathcal{K}_{glo}$ that is learned across all training sequences. To ensure mathematical stability and prevent values from exploding early in training, this global matrix is initialized as an orthogonal matrix using Singular Value Decomposition (SVD). This global operator captures the overall dynamics of the system and provides a stabilizing influence on the local operator. The final transition rule is then a combination of both local and global operators, allowing for more robust and accurate long-horizon forecasting:
+
+$$
+\mathcal{K} = \mathcal{K}_{loc} + \mathcal{K}_{glo}
+$$
+
+Consequently, while the Koopman operator $\mathcal{K}$ allows us to forecast longer horizons with greater stability and accuracy without the compounding error that arises from nonlinear dynamics, there exists an inherent bias that is displayed from our residual error between the predicted and actual future states. To address this, additional components of our K$^2$VAE model are introduced, including an integrator to process nonlinear residuals and a KalmanNet-style refinement mechanism to improve the latent state estimate and model process uncertainty.
+
+### Variational Autoencoders
+
 ## Methodology
 
 **Repository and Collaboration:** We will maintain a shared Git repository to track code, experiments, and documentation throughout the project.
