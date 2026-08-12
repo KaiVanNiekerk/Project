@@ -127,6 +127,20 @@ Consequently, while the Koopman operator $\mathcal{K}$ allows us to forecast lon
 
 ### Variational Autoencoders
 
+While standard autoencoders compress high-dimensional data into a lower-dimensional latent space, they are inherently deterministic and lack the ability to model uncertainty in the latent representation. The encoder maps inputs to exact point estimates in the latent space rather than probabilistic distributions, resulting in disjoint and arbitrary predictions between points. Variational Autoencoders (VAEs) address this by introducing a probabilistic framework in which the encoder maps inputs to a probability distribution over a continuous latent variable $Z$. This latent variable forces the model to learn a structured and smooth representation of the data, allowing for improved sampling and interpolation. 
+
+In our probabilistic time-series forecasting context, we aim to accurately model the conditional distribution of future observations $Y$, given an observed context window $X$. This ultimately requires finding the true posterior distribution $\mathbb{P}(Z|X)$, which is often intractable. VAEs approximate this true posterior with a variational distribution $\mathbb{Q}(Z|X)$, which is parameterized by the encoder. The VAE framework optimizes the Evidence Lower Bound (ELBO) to maximize the likelihood of the observed data while minimizing the divergence between the approximate and true posterior distributions:
+
+$$\mathcal{L}_{ELBO} = -\mathbb{E}[\log \mathbb{P}(Y|Z, X)] + D_{KL}(\mathbb{Q}(Z|X) || \mathbb{P}(Z|X))$$
+
+This evidence lower bound consists of two terms: the reconstruction loss, which measures how well the model can reconstruct the observed data from the latent representation, and the Kullback-Leibler (KL) divergence, which regularizes the latent space by encouraging the approximate posterior to be close to our selected prior distribution. This forces the approximate posterior to remain smooth and continuous, which is crucial for generating coherent and realistic future predictions. By optimizing the ELBO, we can learn a latent representation that captures the underlying structure of the time-series data while also providing a measure of uncertainty in our predictions.
+
+When attempting to optimize this objective, we encounter a challenge: we must sample the latent variable $Z$ from the encoder's predicted distribution $\mathbb{Q}(Z|X)$, which is a stochastic operation that is not differentiable. To address this, we employ the reparameterization trick, which allows us to express the sampling operation as a deterministic function of the encoder's parameters and a separate source of randomness. This enables us to backpropagate gradients through the sampling process and optimize the model using standard gradient-based methods:
+
+$$Z = \mu + \sigma \odot \epsilon, \quad \epsilon \sim \mathcal{N}(0, I)$$
+
+Rather than a standard neural network encoder and decoder architecture, we use a KoopmanNet, an Integrator, and a KalmanNet to form our encoder. This projects the input time-series into a latent measurement space, processes the nonlinear residuals, and refines the latent state estimate, returning an approximate posterior distribution. The decoder acts as an inverse measurement function, mapping the latent representation back to the original observation space. This allows us to generate future predictions while also providing a measure of uncertainty in our forecasts.
+
 ## Methodology
 
 **Repository and Collaboration:** We will maintain a shared Git repository to track code, experiments, and documentation throughout the project.
