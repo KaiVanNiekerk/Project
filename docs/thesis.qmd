@@ -34,7 +34,7 @@ abstract: "This project studies K2VAE, a Koopman-Kalman enhanced variational aut
 
 	- MAYBE: Other models
 
-- Methodology / K2-model
+- K2-model
 
 	- What s this model, what are we actually doing here (model specific stuff)
 
@@ -45,6 +45,8 @@ abstract: "This project studies K2VAE, a Koopman-Kalman enhanced variational aut
 	- All stuff we need to implement to make model work
 
 - Results + Experiments
+
+	- Libraries etc etc
 
 	- Preprocessing (Data cleaning) talk about format
 
@@ -180,3 +182,4 @@ Rather than a standard neural network encoder and decoder architecture, we use a
 * Forecast trajectories comparing model outputs against ground truth.
 
 * Qualitative inspection of latent rollouts and uncertainty behaviour.
+s
