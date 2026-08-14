@@ -10,10 +10,10 @@ def main():
     # ---- config, the values a person actually changes per run ----
     DATASET = "Synthetic"
     T, L, patch_size = 96, 96, 16
-    D = 64
+    D = 64 # Tune
     HIDDEN_DIM = 128
     BATCH_SIZE = 32
-    LR = 1e-3
+    LR = 1e-3  # Tune
     MAX_EPOCHS = 4
     # Hardcoded to CPU for now. kalman.py's step() creates tensors with
     # torch.eye(...) without a device= arg (I, jitter, etc.), so anything
@@ -45,7 +45,7 @@ def main():
         optimizer=optimizer,
         train_loader=train_loader,
         val_loader=val_loader,
-        lambda_rec=1.0,
+        lambda_rec=1.0, # tuned
         device=DEVICE,
         use_wandb=False,
     )
