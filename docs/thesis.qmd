@@ -161,7 +161,7 @@ The observation model relates this hidden state to the noisy observations actual
 $$
 o_k = H x_k + v_k, \qquad v_k \sim \mathcal{N}(0, R)
 $$
-$o_k$ is the observation vector at time step $k$, $H$ is the observation matrix (The relationship between the hidden state and the observed measurements), and $v_k$ is the observation noise, which is also assumed to be Gaussian with zero mean and covariance $R$. 
+$o_k$ is the observation vector at time step $k$, $H$ is the observation matrix (The relationship between the hidden state and the observed measurements, helps map state space into observation space), and $v_k$ is the observation noise, which is also assumed to be Gaussian with zero mean and covariance $R$. 
 
 Making use of these two models at each time step, the Kalman filter executes a prediction step (using the process model) and an update step (using the observation model) to refine its estimate of the hidden state.
 
@@ -182,7 +182,7 @@ $$
 K_k = \hat{P}_k H^\top \left( H \hat{P}_k H^\top + R \right)^{-1}
 $$
 
-The Kalman gain is the ratio of the uncertainty from the prediction step $\hat{P}_k$ as well as the observation noise $R$. The $H$ is used to map the state space into observation space so the covariance matricies can be compared. The Kalman gain is then used to update the state estimate and its uncertainty, taking us from our predicted ($\hat{x}_k$) state to our corrected ($x_k$) state estimate:
+The Kalman gain is the ratio of the uncertainty between the prediction step $\hat{P}_k$ and the observation noise $R$. The $H$ is used to map the state space into observation space so the covariance matricies can be compared. The Kalman gain is then used to update the state estimate and its uncertainty, taking us from our predicted ($\hat{x}_k$) state to our corrected ($x_k$) state estimate:
 $$
 x_k = \hat{x}_k + K_k \left( o_k - H \hat{x}_k \right)
 $$
