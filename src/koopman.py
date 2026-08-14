@@ -50,6 +50,8 @@ class KoopmanNet(nn.Module):
         X_back = X_p_star[:, :, :-1]  # (B, d, n-1), the past, all patches except the last one
         X_forward = X_p_star[:, :, 1:]  # (B, d, n-1), the future, all patches except the first one
 
+        # NOTE Implement regularization (Ridge) for eDMD stability (could be a big issue)
+        
         # Solve X_back^T * K^T = X_fore^T, then transpose the result (this is to follow the convention of the original paper)
         X_back_T = X_back.transpose(1, 2)  # (B, n-1, d)
         X_forward_T = X_forward.transpose(1, 2)  # (B, n-1, d)
