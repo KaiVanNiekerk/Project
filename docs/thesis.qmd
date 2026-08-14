@@ -127,6 +127,56 @@ $$
 
 Consequently, while the Koopman operator $\mathcal{K}$ allows us to forecast longer horizons with greater stability and accuracy without the compounding error that arises from nonlinear dynamics, there exists an inherent bias that is displayed from our residual error between the predicted and actual future states. To address this, additional components of our K$^2$VAE model are introduced, including an integrator to process nonlinear residuals and a KalmanNet-style refinement mechanism to improve the latent state estimate and model process uncertainty.
 
+### Kalman Filter
+
+The Kalman filter is a recursive algorithm that estimates the state of a dynamic system from noisy observations. It assumes the underlying process it is modeling is a linear state space model that alternates between a process model and an observation model. 
+
+The process model describes how the system (hidden state) evolves over discrete time steps.
+$$
+x_k = A x_{k-1} + B u_k + w_k, \qquad w_k \sim \mathcal{N}(0, Q)
+$$
+$x_k$ is the state vector at time step $k$, $A$ is the state transition matrix (The underlying dynamics of a system), $B$ is the control input matrix (The effect of control inputs on the system), $u_k$ is the control input (The external input to the system), and $w_k$ is the process noise, which is assumed to be Gaussian with zero mean and covariance $Q$.
+
+The observation model relates this hidden state to the noisy observations actually observed.
+$$
+o_k = H x_k + v_k, \qquad v_k \sim \mathcal{N}(0, R)
+$$
+$o_k$ is the observation vector at time step $k$, $H$ is the observation matrix (The relationship between the hidden state and the observed measurements), and $v_k$ is the observation noise, which is also assumed to be Gaussian with zero mean and covariance $R$. 
+
+Making use of these two models at each time step, the Kalman filter executes a prediction step (using the process model) and an update step (using the observation model) to refine its estimate of the hidden state.
+
+The prediction step uses the process model to predict the next state and its uncertainty based on the previous state estimate.
+
+$$
+\hat{x}_k = A x_{k-1} + B u_k
+$$
+
+$$
+\hat{P}_k = A P_{k-1} A^\top + Q
+$$
+
+$\hat{x}_k$  is the state estimate and $\hat{P}_k$ is the uncertainty (covariance) of the state estimate.
+
+We then use the observation model to correct our state estimate based on the new observation $o_k$ and how much we trust prediction against how much we trust the observation. This is called the Kalman gain $K_k$. Which is computed as follows:
+$$
+K_k = \hat{P}_k H^\top \left( H \hat{P}_k H^\top + R \right)^{-1}
+$$
+
+The Kalman gain is the ratio of the uncertainty from the prediction step $\hat{P}_k$ as well as the observation noise $R$. The $H$ is used to map the state space into observation space so the covariance matricies can be compared. The Kalman gain is then used to update the state estimate and its uncertainty, taking us from our predicted ($\hat{x}_k$) state to our corrected ($x_k$) state estimate:
+$$
+x_k = \hat{x}_k + K_k \left( o_k - H \hat{x}_k \right)
+$$
+
+$$
+P_k = \left(I - K_k H\right) \hat{P}_k
+$$
+
+ The term. $o_k - H \hat{x}_k$ is the innovation (the residual). This is the discrepancy between the actual observation and the predicted observation. When this difference is large our predicted state and our observation are not in agreement. If this difference is small then our predicted state and our observation are in agreement. A $K_k$ close to 1 indicates that we trust our observation more as our prediction is uncertain thus upweight the innovation's importance, while a $K_k$ close to 0 indicates that we trust our prediction more as our observation is noisy and downweight our innovation's importance. After this we then update our uncertainty $P_k$ purely based on the observation matrix and the kalman gain to reflect the new information gained from the observation.
+
+-- JUST A NOTE TO PUT THE Joseph-stabilized covariance update in K2VAE model section --
+
+The extension to the kalman filter to handle non linear systems is through the koopman operator and koopman theory. We also make use of KalmanNet, a neural network-based extension of the Kalman filter that learns the desired matricies $A$, $B$, $H$, $Q$, and $R$ from data, allowing it to adapt to complex and nonlinear dynamics. This is particularly useful in our context, where the underlying system may not adhere to the strict linear assumptions of the traditional Kalman filter.
+
 ### Variational Autoencoders
 
 While standard autoencoders compress high-dimensional data into a lower-dimensional latent space, they are inherently deterministic and lack the ability to model uncertainty in the latent representation. The encoder maps inputs to exact point estimates in the latent space rather than probabilistic distributions, resulting in disjoint and arbitrary predictions between points. Variational Autoencoders (VAEs) address this by introducing a probabilistic framework in which the encoder maps inputs to a probability distribution over a continuous latent variable $Z$. This latent variable forces the model to learn a structured and smooth representation of the data, allowing for improved sampling and interpolation. 
