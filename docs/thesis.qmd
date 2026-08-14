@@ -77,6 +77,24 @@ The K2VAE paper addresses this by combining three ideas that are individually us
 
 The core question for this project is whether that combination produces a forecasting model that is meaningfully better than the state-of-the-art baselines reported in the paper on long-horizon probabilistic forecasting tasks, especially when the data contain nonlinear structure, multivariate interactions, and forecast drift. The project is therefore not just about reproducing the paper’s architecture; it is about testing whether the architectural choices give a real forecasting advantage.
 
+### Literature Review
+
+Autoencoders (AEs) compress high-dimensional inputs into a lower-dimensional latent space, but that latent space is usually not structured for sampling or prediction. Variational autoencoders (VAEs) fix this by adding a probabilistic prior and optimising the Evidence Lower Bound (ELBO), which is the part of the K2VAE setup that makes the patch embeddings usable as a generative forecasting representation rather than just a deterministic feature vector [@hinton2006reducing; @kingma2014vae].
+
+VAEs alone do not model temporal evolution, so sequential extensions such as Deep State-Space Models (DSSMs), the Deep Kalman Filter (DKF), and the Kalman Variational Autoencoder (KVAE) add latent transitions and learned observation models for time-series forecasting [@krishnan2015deep; @fraccaro2017disentangled]. Their limitation is that recurrent latent dynamics can still blur the state representation and weaken long-horizon stability [@klushyn2021latent].
+
+That is where K2VAE differs. It keeps the probabilistic latent representation, but replaces the purely recurrent transition with a Koopman-inspired evolution step and a learned KalmanNet refinement stage [@k2vae2025; @kalmannet2021]. Koopman theory is useful here because it offers a way to represent nonlinear dynamics through approximately linear evolution in a learned observable space, and K2VAE uses a measurement function to map embedded patches into that space before KoopmanNet propagates them forward [@koopman2021modern].
+
+The measurement function is therefore not just another projection layer. It defines the observable space in which the latent dynamics are expected to behave more linearly, so it is the bridge between the patch embeddings and the Koopman operator [@k2vae2025].
+
+The Kalman side of the architecture is equally important. Classical Kalman filtering alternates between prediction and update, and K2VAE preserves that recursive structure while learning the correction step from data instead of assuming a closed-form system model [@kalman1960new; @jazwinski2007stochastic; @kalmannet2021].
+
+KalmanNet is the part that makes this filtering stage adaptive: it learns how to adjust the predicted latent state from the incoming observation while still following the predict-update logic that makes Kalman-style estimation stable and interpretable [@kalmannet2021].
+
+Patching then makes the whole pipeline tractable by shortening the input sequence into local chunks before embedding, which reduces sequence length while preserving local structure [@k2vae2025]. In combination, the patching, Koopman-style evolution, KalmanNet refinement, and VAE objective are what make K2VAE a distinct forecasting model rather than just another VAE for time series.
+
+### Chapter Outline
+
 ## Prelinaries
 
 ### Koopman Theory
@@ -144,39 +162,3 @@ Z = \mu + \sigma \odot \epsilon, \quad \epsilon \sim \mathcal{N}(0, I)
 $$
 
 Rather than a standard neural network encoder and decoder architecture, we use a KoopmanNet, an Integrator, and a KalmanNet to form our encoder. This projects the input time-series into a latent measurement space, processes the nonlinear residuals, and refines the latent state estimate, returning an approximate posterior distribution. The decoder acts as an inverse measurement function, mapping the latent representation back to the original observation space. This allows us to generate future predictions while also providing a measure of uncertainty in our forecasts.
-
-## Methodology
-
-**Repository and Collaboration:** We will maintain a shared Git repository to track code, experiments, and documentation throughout the project.
-
-**Implementation Stack (Python):**
-
-* Core modeling and training: `torch` (PyTorch) for model implementation and gradient-based training.
-
-* Numerical and probabilistic computation: `numpy` and `scipy` for matrix operations, Gaussian routines, and state-space calculations.
-
-* Data handling and experiment tracking: `pandas` for preprocessing, logs, and result tables.
-
-* Visualization and evaluation: `matplotlib` and `seaborn` for plots, and `scikit-learn` for evaluation measures such as $R^2$ where relevant.
-
-**Datasets:** Benchmarks (required): We will reproduce results on a small subset of the datasets used in the paper before scaling up to the broader benchmark family, which includes ETTh1, ETTh2, ETTm1, ETTm2, Electricity, Traffic, Exchange, Weather, and ILI. The initial goal is to verify that the model works cleanly on at least one short-horizon and one long-horizon setting before extending to the full suite.
-
-**Experimental Structure:** We will run the models in stages with fixed settings and seeds to ensure that the comparisons are controlled.
-
-**Primary Quantitative Metrics:**
-
-* Mean Squared Error (MSE) for prediction and rollout accuracy.
-
-* Normalised Mean Absolute Error (NMAE) for point-forecast performance.
-
-* Continuous Ranked Probability Score (CRPS) and calibration diagnostics for predictive uncertainty.
-
-* Long-horizon stability to assess whether the rollout remains reliable as the prediction horizon grows.
-
-**Analysis and Convergence Checks:**
-
-* Training curves showing how the objective evolves during optimisation.
-
-* Forecast trajectories comparing model outputs against ground truth.
-
-* Qualitative inspection of latent rollouts and uncertainty behaviour.
