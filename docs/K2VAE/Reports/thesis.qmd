@@ -197,7 +197,7 @@ $$
 
 The extension to the kalman filter to handle non linear systems is through the koopman operator and koopman theory. We also make use of KalmanNet, a neural network-based extension of the Kalman filter that learns the desired matricies $A$, $B$, $H$, $Q$, and $R$ from data, allowing it to adapt to complex and nonlinear dynamics. This is particularly useful in our context, where the underlying system may not adhere to the strict linear assumptions of the traditional Kalman filter.
 
-### Transformer
+### Transformer (Encoder Based Vanilla)
 
 A transformer is a deep learning architecture that has revolutionized the field of natural language processing and has also been applied to time-series forecasting. It is based on the self-attention mechanism, which allows the model to weigh the importance of different parts of the input sequence when making predictions. This is particularly useful for time-series data, where the relationships between different time steps can be complex and non-linear. 
 
@@ -228,7 +228,19 @@ Both the multihead attention and the feedforward network are wrapped in residual
 
 Since attention treats the sequence as an unordered set, order information is injected separately, typically via a fixed positional encoding added to the input embeddings before the first layer. Stacking $N$ such layers, with no causal masking and no decoder cross-attention, gives the encoder-only variant used here: a bidirectional token mixer mapping $\mathbb{R}^{n\times d} \to \mathbb{R}^{n\times d}$ that captures both local and global dependencies across the input sequence of token embeddings.
 
-## Integrator
+### Integrator -- Dont know what to write here as this seems much more like a model specific thing than a preliminary. Is this breif enough or for a preliminary or hsould just be briefly mentioned at end of transformer?
+
+An integrator is used to capture the nonlinear residuals that arise from the linear approximation of the Koopman operator. The integrator takes in $X^{Res}$, the result of:
+$$ 
+X^{Res} = X^{P^{*}} - \hat{X^{C}}
+$$
+Where $X^{P^{*}}$ is the projected latent state and $\hat{X^{C}}$ is the reconstructed latent state from the Koopman operator. The integrator processes this residual using an encoder-only transformer which is described in the preliminary above. The integrator outputs a sequence of control inputs $U$ that span the prediction horizon:
+
+$$
+U = \mathrm{Integrator}(X^{Res}) = [u_1, u_2, \dots, u_m], \qquad U \in \mathbb{R}^{d\times m}
+$$
+
+ This vector $U$ is used to correct the predicted latent state, allowing the model to account for nonlinearities and improve the accuracy of long-horizon forecasts.
 
 ### Variational Autoencoders
 
