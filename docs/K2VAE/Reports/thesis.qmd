@@ -197,6 +197,39 @@ $$
 
 The extension to the kalman filter to handle non linear systems is through the koopman operator and koopman theory. We also make use of KalmanNet, a neural network-based extension of the Kalman filter that learns the desired matricies $A$, $B$, $H$, $Q$, and $R$ from data, allowing it to adapt to complex and nonlinear dynamics. This is particularly useful in our context, where the underlying system may not adhere to the strict linear assumptions of the traditional Kalman filter.
 
+### Transformer
+
+A transformer is a deep learning architecture that has revolutionized the field of natural language processing and has also been applied to time-series forecasting. It is based on the self-attention mechanism, which allows the model to weigh the importance of different parts of the input sequence when making predictions. This is particularly useful for time-series data, where the relationships between different time steps can be complex and non-linear. 
+
+Given a sequence of n input token embeddings $X \in \mathbb{R}^{n \times d}$, the transformer computes three matrices through linear transformations: the query $Q$, the key $K$, and the value $V$:
+$$
+Q = XW^Q, \quad K = XW^K, \quad V = XW^V
+$$
+
+$X$ is the input sequence of token embeddings, and $W^Q$, $W^K$, and $W^V$ are learnable weight matrices. Each token calculates a weighted average of the values $V$ based on the similarity between its query $Q$ and the keys $K$ of all other tokens. This is done using the scaled dot-product attention mechanism and allows the model to relate tokens to each other regardless of their position in the sequence. The attention scores for each token are computed as follows:
+$$
+\text{Attention}(Q, K, V) = \text{softmax}\left(\frac{QK^\top}{\sqrt{d_k}}\right)V
+$$
+
+Transformers make use of multi-head attention, which allows the model to jointly evaluate information from different representation subspaces. Each head computes its own attention scores and outputs, which are then concatenated and linearly transformed to produce the final output. This enables the model to capture various aspects of the input sequence simultaneously. This is done via the following equation:
+$$
+\text{MultiHead}(Q, K, V) = \text{Concat}(\text{head}_1, \ldots, \text{head}_h)W^O
+$$
+$W^O$ is a learnable weight matrix that projects the concatenated outputs of all heads back into the original embedding space. 
+
+We then use a position wise feedforward neural network to further process the output of the multi-head attention mechanism. This feedforward network consists of two linear transformations with a ReLU activation in between, applied independently to each position in the sequence:
+
+$$
+\mathrm{FFN}(x) = \underbrace{\max(0,\, xW_1 + b_1)}_{\text{ReLU}}\,W_2 + b_2
+$$
+$W_1$ and $W_2$ are learnable weight matrices, and $b_1$ and $b_2$ are learnable bias vectors. The feedforward network allows the model to capture complex relationships and interactions within a single token embedding (whereas attention captures dependencies between token embeddings).
+
+Both the multihead attention and the feedforward network are wrapped in residual connections and layer normalization, which help stabilize training and improve convergence.
+
+Since attention treats the sequence as an unordered set, order information is injected separately, typically via a fixed positional encoding added to the input embeddings before the first layer. Stacking $N$ such layers, with no causal masking and no decoder cross-attention, gives the encoder-only variant used here: a bidirectional token mixer mapping $\mathbb{R}^{n\times d} \to \mathbb{R}^{n\times d}$ that captures both local and global dependencies across the input sequence of token embeddings.
+
+## Integrator
+
 ### Variational Autoencoders
 
 While standard autoencoders compress high-dimensional data into a lower-dimensional latent space, they are inherently deterministic and lack the ability to model uncertainty in the latent representation. The encoder maps inputs to exact point estimates in the latent space rather than probabilistic distributions, resulting in disjoint and arbitrary predictions between points. Variational Autoencoders (VAEs) address this by introducing a probabilistic framework in which the encoder maps inputs to a probability distribution over a continuous latent variable $Z$. This latent variable forces the model to learn a structured and smooth representation of the data, allowing for improved sampling and interpolation. 
