@@ -5,6 +5,7 @@ import torch
 import wandb
  
 from elbo import total_loss
+from metrics import crps
 
 class Trainer:
     """
@@ -151,7 +152,8 @@ class Trainer:
             for k in running:
                 running[k] += losses[k].item()
             n_batches += 1
- 
+            
+        # Guard to not crash model if all 0s within a batch
         n_batches = max(n_batches, 1)  # guard against an all-NaN epoch (Xero div)
         return {k: v / n_batches for k, v in running.items()} # returns the average metrics for the epoch
     
@@ -190,6 +192,7 @@ class Trainer:
                 running[k] += losses[k].item()
             n_batches += 1
  
+        # Guard to not crash model if all 0s within a batch
         n_batches = max(n_batches, 1)
         return {k: v / n_batches for k, v in running.items()}
     
@@ -221,6 +224,104 @@ class Trainer:
         else:
             self.epochs_since_improvement += 1
         return self.epochs_since_improvement > self.patience
+    
+    
+    def load_checkpoint(self, path: str = None) -> dict:
+        """
+            Loads a checkpoint saved by _checkpoint_step into self.model and
+            self.optimizer. Defaults to this Trainer's own checkpoint_path (the
+            best-val-loss checkpoint), but accepts an explicit path if loading
+            a checkpoint saved by a different run.
+            """
+        ckpt_path = path or self.checkpoint_path
+        checkpoint = torch.load(ckpt_path, map_location=self.device)
+        self.model.load_state_dict(checkpoint["model_state_dict"])
+        self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+        return checkpoint
+    
+    # Note the compute_crps flag is just used so we can run eval and test it w/o having to do the 
+    # sampling process needed for crps
+    @torch.no_grad()
+    def evaluate(self, loader, compute_crps: bool = False, crps_samples: int = 100) -> dict:
+        """
+        Runs the model in eval mode over `loader`, intended for test_loader
+        called once after training. Returns both the averaged loss
+        components (same shape as _validate) and the raw per-batch tensors
+        concatenated over the batch dim, for metrics.py and
+        plot_data.PlotDataCollector to consume.
+
+        Unlike _train_epoch and _validate, skipped batches here are NOT
+        silently absorbed into a running average, since dropping test data
+        changes what the reported metrics measure. They are counted and
+        the count is returned.
+        """
+        self.model.eval()
+        running = {"total": 0.0, "elbo": 0.0, "nll": 0.0, "kl": 0.0, "rec": 0.0, "crps": 0.0}
+        n_batches = 0
+        skipped = 0
+
+        X_C_all, X_H_all, X_Rec_all, mu_all, sigma_all = [], [], [], [], []
+
+        for X_C, X_H in loader:
+            X_C = X_C.to(self.device)
+            X_H = X_H.to(self.device)
+
+            try:
+                X_Rec, mu, sigma, Z_prime, P = self.model(X_C)
+
+                losses = total_loss(
+                    X_H=X_H,
+                    mu=mu,
+                    sigma=sigma,
+                    Z_prime=Z_prime,
+                    P=P,
+                    X_C=X_C,
+                    X_Rec=X_Rec,
+                    lambda_rec=self.lambda_rec,
+                )
+            except RuntimeError as e:
+                skipped += 1
+                print(f"[test] skipped batch: {type(e).__name__}: {e}")
+                continue
+
+            if not torch.isfinite(losses["total"]):
+                skipped += 1
+                continue
+
+            for k in running:
+                if k != "crps":
+                    running[k] += losses[k].item()
+            n_batches += 1
+            
+            if compute_crps:                          
+                pred_samples = self.model.sample_predictive(X_C, n_samples=crps_samples)
+                running["crps"] += crps(pred_samples, X_H, sample_dim=0).item()
+
+            # Moved to CPU immediately so this doesn't hold a growing GPU
+            # buffer for the whole test set.
+            X_C_all.append(X_C.cpu())
+            X_H_all.append(X_H.cpu())
+            X_Rec_all.append(X_Rec.cpu())
+            mu_all.append(mu.cpu())
+            sigma_all.append(sigma.cpu())
+
+        if skipped:
+            print(f"[test] {skipped} batch(es) skipped out of {skipped + n_batches}")
+
+        # Guard to not crash model if all 0s within a batch
+        n_batches_safe = max(n_batches, 1)
+        avg_losses = {k: v / n_batches_safe for k, v in running.items()}
+
+        return {
+            "losses": avg_losses,
+            "n_batches": n_batches,
+            "n_skipped": skipped,
+            "X_C": torch.cat(X_C_all, dim=0) if X_C_all else None,
+            "X_H": torch.cat(X_H_all, dim=0) if X_H_all else None,
+            "X_Rec": torch.cat(X_Rec_all, dim=0) if X_Rec_all else None,
+            "mu": torch.cat(mu_all, dim=0) if mu_all else None,
+            "sigma": torch.cat(sigma_all, dim=0) if sigma_all else None,
+        }
     
 
 # Minimal wandb-sweep entry point. lambda_rec is pulled from

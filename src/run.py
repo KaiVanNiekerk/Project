@@ -3,6 +3,7 @@ import torch
 
 from CLI import CLI
 from k2vae import K2VAE
+from metrics import nmae
 from train import Trainer
 
 
@@ -15,19 +16,12 @@ def main():
     BATCH_SIZE = 32
     LR = 1e-3  # Tune
     MAX_EPOCHS = 4
-    # Hardcoded to CPU for now. kalman.py's step() creates tensors with
-    # torch.eye(...) without a device= arg (I, jitter, etc.), so anything
-    # that ends up on GPU would silently mismatch device with self.A/H/B and
-    # crash. Flip this once that's fixed, see RoadMap.md checklist.
-    DEVICE = "cpu"
-    # DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+    DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
     # ---- data ----
     cli = CLI(datasets_dir="datasets")
-    train_loader, val_loader, test_loader = cli.load(
+    train_loader, val_loader, test_loader, n, m = cli.load(
         DATASET, T=T, L=L, patch_size=patch_size, batch_size=BATCH_SIZE
     )
-
-    n, m = T // patch_size, L // patch_size
 
     X_C, _ = next(iter(train_loader))
     input_dim = X_C.shape[1]
@@ -48,10 +42,21 @@ def main():
         lambda_rec=1.0, # tuned
         device=DEVICE,
         use_wandb=False,
+        checkpoint_name=f"k2vae_{DATASET}.pt",
     )
 
     result = trainer.fit(maxEpochs=MAX_EPOCHS)
     print(result)
+    
+    # Load best checkpoint and evaluate on test set
+    trainer.load_checkpoint()
+    test_result = trainer.evaluate(test_loader, compute_crps=True, crps_samples=100)
+    print(f"test losses: {test_result['losses']}")
+    print(f"test batches: {test_result['n_batches']} (skipped {test_result['n_skipped']})")
+    
+    test_nmae = nmae(test_result["X_H"], test_result["mu"])
+    print(f"test NMAE: {test_nmae.item():.4f}")
+    print(f"test CRPS: {test_result['losses']['crps']:.4f}")
 
 
 if __name__ == "__main__":

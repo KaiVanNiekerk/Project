@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.distributions.normal import Normal
 from torch.distributions.multivariate_normal import MultivariateNormal
 from koopman import KoopmanNet
 from integrator import Integrator
@@ -65,6 +66,36 @@ class K2VAE(nn.Module):
             return Z_sample_T.transpose(1, 2)  # (B, d, m)
 
         return Z_prime # During evaluation, return the deterministic mean 
+    
+    def _encode(self, x: torch.Tensor):
+        """
+        Runs the deterministic upstream stages shared by forward() and
+        sample_predictive(): patch embedding, KoopmanNet, Integrator,
+        KalmanNet. Everything past this point (reparameterize + decode)
+        differs between "one training sample" and "n_samples for CRPS",
+        so this is where the two paths split off from shared code.
+
+        Returns:
+            Z_prime (torch.Tensor): (Batch, d, m)
+            P (torch.Tensor): (Batch, m, d, d)
+            X_C_hat (torch.Tensor): (Batch, d, n), needed by forward() for
+                reconstructed_X_C_mu but not by sample_predictive()
+        """
+        x_T = x.transpose(1, 2)
+        X_p_prime_T = self.patch_embedding(x_T)
+        X_p_prime = X_p_prime_T.transpose(1, 2)
+
+        z_star, X_C_hat, X_H_hat = self.koopman(X_p_prime, self.m)
+
+        X_res = z_star - X_C_hat
+        X_res_T = X_res.transpose(1, 2)
+        U_T = self.integrator(X_res_T)
+        U = U_T.transpose(1, 2)
+
+        z_0 = z_star[:, :, -1]
+        Z_prime, P = self.kalman(z_0, U, X_H_hat)
+
+        return Z_prime, P, X_C_hat
 
     def forward(self, x: torch.Tensor):
         """
@@ -79,26 +110,8 @@ class K2VAE(nn.Module):
                 - Z_prime (torch.Tensor): Refined latent mean for KL Divergence calculation. Shape: (Batch, d, m)
                 - P (torch.Tensor): Latent covariance matrices for KL Divergence calculation. Shape: (Batch, m, d, d)
         """
-        # Input token embedding
-        x_T = x.transpose(1, 2)  # (B, n, input_dim)
-        X_p_prime_T = self.patch_embedding(x_T)  # (B, n, d)
-        X_p_prime = X_p_prime_T.transpose(1, 2)  # (B, d, n)
-
-        # KoopmanNet forward pass to get the true mapped history, past reconstruction, and future prediction
-        # z_star: true mapped history , X_C_hat: past reconstruction, X_H_hat: future prediction
-        z_star, X_C_hat, X_H_hat = self.koopman(X_p_prime, self.m)
-
-        # Integrator forward pass to get the predicted future states based on the residuals between the true mapped history and past reconstruction
-        X_res = z_star - X_C_hat  # (B, d, n), residuals between true mapped history and past reconstruction
-        X_res_T = X_res.transpose(1, 2)  # (B, n, d)
-        U_T = self.integrator(X_res_T)  # (B, m, d)
-        U = U_T.transpose(1, 2)  # (B, d, m), the control sequence mapping the Koopman residuals to the future prediction horizon
-
-        # KalmanNet forward pass to get the mean and covariance of Q(Z|X)
-        z_0 = z_star[:, :, -1]  # (B, d), last token of the true mapped history as the initial state for KalmanNet
-
-        Z_prime, P = self.kalman(z_0, U, X_H_hat)  # Z_prime: (B, d, m), P: (B, m, d, d)
-
+        Z_prime, P, X_C_hat = self._encode(x)
+        
         Z_sample = self.reparameterize(Z_prime, P)  # (B, d, m), this is the sampled latent states from Q(Z|X) 
 
         # Decode the sampled latent states to reconstruct the input data
@@ -113,3 +126,40 @@ class K2VAE(nn.Module):
 
         return reconstructed_X_C_mu, reconstructed_X_H_mu, reconstructed_X_H_sigma, Z_prime, P
 
+    def sample_predictive(self, x: torch.Tensor, n_samples: int = 100) -> torch.Tensor:
+        """
+        Draws n_samples from the posterior predictive P(Y|X), for CRPS
+        estimation (paper Appendix C.3 uses n=100). Unlike forward(), which
+        reparameterizes Z once, this samples Z ~ Q(Z|X) and then Y|Z ~
+        N(mu, sigma) independently n_samples times, since CRPS needs draws
+        from the full predictive distribution rather than the decoder mean.
+
+        Shares the deterministic upstream stages with forward() via
+        _encode(), so those layers are still only defined/run once here,
+        not duplicated.
+
+        Args:
+            x (torch.Tensor): patched input context. Shape (Batch, input_dim, n)
+            n_samples (int): number of posterior predictive draws.
+
+        Returns:
+            torch.Tensor: horizon samples. Shape (n_samples, Batch, input_dim, m)
+        """
+        Z_prime, P, _ = self._encode(x)
+
+        Z_prime_T = Z_prime.transpose(1, 2)  # (B, m, d)
+        jitter = torch.eye(self.d, device=P.device).expand_as(P) * 1e-5
+        dist_z = MultivariateNormal(loc=Z_prime_T, covariance_matrix=P + jitter)
+
+        samples = []
+        for _ in range(n_samples):
+            Z_sample_T = dist_z.rsample()  # (B, m, d)
+
+            mu = self.decoder_mu(Z_sample_T).transpose(1, 2)      # (B, input_dim, m)
+            sigma = self.decoder_sigma(Z_sample_T).transpose(1, 2)
+            sigma = F.softplus(sigma) + 1e-5
+
+            y_sample = Normal(mu, sigma).rsample()
+            samples.append(y_sample)
+
+        return torch.stack(samples, dim=0)  # (n_samples, B, input_dim, m)

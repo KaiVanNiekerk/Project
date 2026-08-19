@@ -56,7 +56,7 @@ class KalmanNet(nn.Module):
         batch_size = z_prev.shape[0]
         # Might need to add somehting here to train on GPU?
         # The -1s here mean dotn change that dimension, so the resulting tensor will have shape (B, d, d)
-        I = torch.eye(self.state_dim).expand(batch_size, -1, -1) # Identity matrix with dims d, d
+        I = torch.eye(self.state_dim, device=z_prev.device).expand(batch_size, -1, -1) # Identity matrix with dims d, d
         
         # Prediction step
         # z_hat_k = A z_{k-1} + B u_k
@@ -120,7 +120,7 @@ class KalmanNet(nn.Module):
         
         if P_0 is None:
             # The -1s here mean dotn change that dimension, so the resulting tensor will have shape (B, d, d)
-            P_0 = torch.eye(self.state_dim).expand(batch_size, -1, -1)
+            P_0 = torch.eye(self.state_dim, device=z_0.device).expand(batch_size, -1, -1)
 
         z_prev, P_prev = z_0, P_0
         z_list, P_list = [], []
