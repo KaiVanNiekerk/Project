@@ -84,6 +84,9 @@ class CLI:
         if L % patch_size != 0:
             raise ValueError(f"L={L} not divisible by patch_size={patch_size} (m = L/patch_size must be an int)")
         
+        n = T // patch_size
+        m = L // patch_size
+        
         df = load_csv(str(self.resolve(name)))
         train_df, val_df, test_df = split(df, train_frac, val_frac)
         train_arr, val_arr, test_arr, scaler = scale(train_df, val_df, test_df)
@@ -93,14 +96,14 @@ class CLI:
         val_loader = DataLoader(swDataset(val_arr, T, L), batch_size=batch_size, shuffle=False, collate_fn=collate)
         test_loader = DataLoader(swDataset(test_arr, T, L), batch_size=batch_size, shuffle=False, collate_fn=collate)
  
-        return train_loader, val_loader, test_loader
+        return train_loader, val_loader, test_loader, n, m
         
 def smoke_test():
     cli = CLI(datasets_dir="datasets")
     print("found datasets:", cli.scan())
  
     name = cli.scan()[0]
-    train_loader, val_loader, test_loader = cli.load(name, T=96, L=96, patch_size=16)
+    train_loader, val_loader, test_loader, n, m = cli.load(name, T=96, L=96, patch_size=16)
  
     X_C, X_H = next(iter(train_loader))
     print(f"X_C (context, patched) shape: {X_C.shape}")   # (B, input_dim, n)
