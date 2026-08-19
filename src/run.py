@@ -50,12 +50,13 @@ def main():
     
     # Load best checkpoint and evaluate on test set
     trainer.load_checkpoint()
-    test_result = trainer.evaluate(test_loader)
+    test_result = trainer.evaluate(test_loader, compute_crps=True, crps_samples=100)
     print(f"test losses: {test_result['losses']}")
     print(f"test batches: {test_result['n_batches']} (skipped {test_result['n_skipped']})")
     
     test_nmae = nmae(test_result["X_H"], test_result["mu"])
     print(f"test NMAE: {test_nmae.item():.4f}")
+    print(f"test CRPS: {test_result['losses']['crps']:.4f}")
 
 
 if __name__ == "__main__":

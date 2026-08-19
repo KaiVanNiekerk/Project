@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.distributions.normal import Normal
 from torch.distributions.multivariate_normal import MultivariateNormal
 from koopman import KoopmanNet
 from integrator import Integrator

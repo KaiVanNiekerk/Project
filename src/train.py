@@ -5,6 +5,7 @@ import torch
 import wandb
  
 from elbo import total_loss
+from metrics import crps
 
 class Trainer:
     """
@@ -238,8 +239,10 @@ class Trainer:
         self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
         return checkpoint
     
+    # Note the compute_crps flag is just used so we can run eval and test it w/o having to do the 
+    # sampling process needed for crps
     @torch.no_grad()
-    def evaluate(self, loader) -> dict:
+    def evaluate(self, loader, compute_crps: bool = False, crps_samples: int = 100) -> dict:
         """
         Runs the model in eval mode over `loader`, intended for test_loader
         called once after training. Returns both the averaged loss
@@ -253,7 +256,7 @@ class Trainer:
         the count is returned.
         """
         self.model.eval()
-        running = {"total": 0.0, "elbo": 0.0, "nll": 0.0, "kl": 0.0, "rec": 0.0}
+        running = {"total": 0.0, "elbo": 0.0, "nll": 0.0, "kl": 0.0, "rec": 0.0, "crps": 0.0}
         n_batches = 0
         skipped = 0
 
@@ -286,8 +289,13 @@ class Trainer:
                 continue
 
             for k in running:
-                running[k] += losses[k].item()
+                if k != "crps":
+                    running[k] += losses[k].item()
             n_batches += 1
+            
+            if compute_crps:                          
+                pred_samples = self.model.sample_predictive(X_C, n_samples=crps_samples)
+                running["crps"] += crps(pred_samples, X_H, sample_dim=0).item()
 
             # Moved to CPU immediately so this doesn't hold a growing GPU
             # buffer for the whole test set.
