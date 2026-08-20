@@ -207,7 +207,10 @@ class PlotDataCollector:
         if missing:
             raise ValueError(f"Missing required YAML keys: {missing}")
 
-        cfg = DatasetPlotConfig(**raw)
+        #cfg = DatasetPlotConfig(**raw)
+        import dataclasses
+        known_fields = {f.name for f in dataclasses.fields(DatasetPlotConfig)}
+        cfg = DatasetPlotConfig(**{k: v for k, v in raw.items() if k in known_fields})
 
         if cfg.input_window % cfg.patch_size != 0:
             raise ValueError("input_window must be divisible by patch_size")

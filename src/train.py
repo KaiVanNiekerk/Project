@@ -6,6 +6,7 @@ import wandb
  
 from elbo import total_loss
 from metrics import crps
+from plotting import EpochHistory
 
 class Trainer:
     """
@@ -61,6 +62,17 @@ class Trainer:
         self.epochs_since_improvement = 0
         self.nan_batches_skipped = 0 # Diagnostic
         
+        # Per-epoch metric history, for plotting.py's plot_loss_curves().
+        self.history = EpochHistory(
+            epoch=[],
+            train_total=[], val_total=[],
+            train_elbo=[], val_elbo=[],
+            train_nll=[], val_nll=[],
+            train_kl=[], val_kl=[],
+            train_rec=[], val_rec=[],
+            skipped_batches=[],
+        )
+        
         # Actual training loop
     def fit(self, maxEpochs: int):
         for epoch in range(1, maxEpochs + 1):
@@ -68,6 +80,20 @@ class Trainer:
             val_metrics = self._validate(epoch)
             #Logging
             print(f"epoch {epoch}: train_loss={train_metrics['total']:.4f}, val_loss={val_metrics['total']:.4f}")
+            
+            # Record this epoch's metrics for plot_loss_curves()
+            self.history.epoch.append(epoch)
+            self.history.train_total.append(train_metrics["total"])
+            self.history.val_total.append(val_metrics["total"])
+            self.history.train_elbo.append(train_metrics["elbo"])
+            self.history.val_elbo.append(val_metrics["elbo"])
+            self.history.train_nll.append(train_metrics["nll"])
+            self.history.val_nll.append(val_metrics["nll"])
+            self.history.train_kl.append(train_metrics["kl"])
+            self.history.val_kl.append(val_metrics["kl"])
+            self.history.train_rec.append(train_metrics["rec"])
+            self.history.val_rec.append(val_metrics["rec"])
+            self.history.skipped_batches.append(self.nan_batches_skipped)
             
             if self.use_wandb:
                 wandb.log(
