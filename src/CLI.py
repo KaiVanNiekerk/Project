@@ -3,6 +3,7 @@ from torch.utils.data import DataLoader
 from torch.utils.data.dataloader import default_collate
  
 from preprocessing import load_csv, split, scale, swDataset, k2vae_integration
+from sklearn.preprocessing import StandardScaler
  
 """
 Paper-specified (T, L) settings, Table 1 / Appendix C.1 (K^2VAE, Wu et al.).
@@ -45,27 +46,29 @@ class CLI:
     # and allows for easy extension to new datasets in the future
     # User will just enter ETTh1, the directory will be organised after.
     def scan(self) -> list[str]:
-        # dataset name == csv stem, e.g. datasets/ETTh1.csv -> "ETTh1"
-        return sorted(p.stem for p in self.datasets_dir.glob("*.csv"))
- 
+        return sorted(
+            p.relative_to(self.datasets_dir).as_posix()
+            for p in self.datasets_dir.rglob("*.csv")
+        )
+        
     # Returns error message if file not found, otherwise returns the path to the dataset file
-    def resolve(self, name: str) -> Path:
-        path = self.datasets_dir / f"{name}.csv"
+    def resolve(self, csv_path: str) -> Path:
+        path = self.datasets_dir / csv_path
         if not path.exists():
             available = ", ".join(self.scan()) or "(none found)"
-            raise FileNotFoundError(f"'{name}' not in {self.datasets_dir}. Available: {available}")
+            raise FileNotFoundError(f"'{csv_path}' not found under {self.datasets_dir}. Available: {available}")
         return path
  
     def load(
         self,
-        name: str,
+        csv_path: str,
         T: int,
         L: int,
         patch_size: int,
         train_frac: float = 0.7,
         val_frac: float = 0.15,
         batch_size: int = 32,
-    ) -> tuple[DataLoader, DataLoader, DataLoader]:
+    ) -> tuple[DataLoader, DataLoader, DataLoader, int, int, StandardScaler]:
         
         # FLAG!!!!
         # Bring up with jake and kai: the resulting n = T // patch_size and m = L // patch_size
@@ -87,7 +90,7 @@ class CLI:
         n = T // patch_size
         m = L // patch_size
         
-        df = load_csv(str(self.resolve(name)))
+        df = load_csv(str(self.resolve(csv_path)))
         train_df, val_df, test_df = split(df, train_frac, val_frac)
         train_arr, val_arr, test_arr, scaler = scale(train_df, val_df, test_df)
  
@@ -96,14 +99,17 @@ class CLI:
         val_loader = DataLoader(swDataset(val_arr, T, L), batch_size=batch_size, shuffle=False, collate_fn=collate)
         test_loader = DataLoader(swDataset(test_arr, T, L), batch_size=batch_size, shuffle=False, collate_fn=collate)
  
-        return train_loader, val_loader, test_loader, n, m
+        # scaler is returned so callers can inverse-transform predictions
+        # back to the original data scale (needed by
+        # plot_data.PlotDataCollector for plot-ready outputs).
+        return train_loader, val_loader, test_loader, n, m, scaler
         
 def smoke_test():
     cli = CLI(datasets_dir="datasets")
     print("found datasets:", cli.scan())
  
-    name = cli.scan()[0]
-    train_loader, val_loader, test_loader, n, m = cli.load(name, T=96, L=96, patch_size=16)
+    csv_path = cli.scan()[0]
+    train_loader, val_loader, test_loader, n, m, scaler = cli.load(csv_path, T=96, L=96, patch_size=16)
  
     X_C, X_H = next(iter(train_loader))
     print(f"X_C (context, patched) shape: {X_C.shape}")   # (B, input_dim, n)
