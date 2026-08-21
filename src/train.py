@@ -260,7 +260,7 @@ class Trainer:
             a checkpoint saved by a different run.
             """
         ckpt_path = path or self.checkpoint_path
-        checkpoint = torch.load(ckpt_path, map_location=self.device)
+        checkpoint = torch.load(ckpt_path, map_location=self.device, weights_only=False)
         self.model.load_state_dict(checkpoint["model_state_dict"])
         self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
         return checkpoint

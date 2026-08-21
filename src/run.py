@@ -21,7 +21,7 @@ def main():
     #BATCH_SIZE = 32
     #LR = 1e-3  # Tune
     
-    DATASET_CONFIG_PATH = Path("configs/datasets/ETTh1-S.yaml")
+    DATASET_CONFIG_PATH = Path("configs/datasets/ETTh1-L.yaml")
     with DATASET_CONFIG_PATH.open("r", encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
 
@@ -36,10 +36,10 @@ def main():
     LAMBDA_REC = hp["lambda_rec"]
     #integ = hp["integrator"]
     
-    MAX_EPOCHS = 4
+    MAX_EPOCHS = 10
     BATCH_SIZE = 32
     DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-    GENERATE_PLOTS = False  # flip off for quick smoke tests
+    GENERATE_PLOTS = True  # flip off for quick smoke tests
     LOG_TO_WANDB = False  # flip on for hyperparameter tuning runs (e.g., wandb sweeps)
     # ---- data ----
     cli = CLI(datasets_dir="datasets")
@@ -85,9 +85,6 @@ def main():
     print(f"test CRPS: {test_result['losses']['crps']:.4f}")
     
     # ---- plotting ----
-    # NOTE: DatasetPlotConfig is hand-built here as a placeholder. Item 6
-    # (dataset plot config YAML) will replace this with
-    # plot_data.load_dataset_plot_config(path) once that YAML exists.
     if GENERATE_PLOTS:
         plot_cfg = PlotDataCollector.load_dataset_plot_config(DATASET_CONFIG_PATH)
         plot_manager = PlotManager(cfg=plot_cfg, run_id=DATASET_NAME)
