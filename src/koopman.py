@@ -4,9 +4,10 @@ from einops import rearrange
 import math
 
 class KoopmanNet(nn.Module):
-    def __init__(self, d: int, hidden_dim: int = 128):
+    def __init__(self, d: int, hidden_dim: int = 128, ridge_lambda: float = 1e-3):
         super().__init__()
         self.d = d
+        self.ridge_lambda = ridge_lambda
 
         # Measurement function as structured in their koopman configuration 
         self.measurement_function = nn.Sequential(
@@ -49,13 +50,33 @@ class KoopmanNet(nn.Module):
         # to find the line of best fit representing the system's dynamics for each specific batch
         X_back = X_p_star[:, :, :-1]  # (B, d, n-1), the past, all patches except the last one
         X_forward = X_p_star[:, :, 1:]  # (B, d, n-1), the future, all patches except the first one
-
-        # NOTE Implement regularization (Ridge) for eDMD stability (could be a big issue)
         
         # Solve X_back^T * K^T = X_fore^T, then transpose the result (this is to follow the convention of the original paper)
         X_back_T = X_back.transpose(1, 2)  # (B, n-1, d)
         X_forward_T = X_forward.transpose(1, 2)  # (B, n-1, d)
-        K_loc_T = torch.linalg.lstsq(X_back_T, X_forward_T).solution # (B, d, d), this is faster and more numerically stable than using the pseudo-inverse
+
+        # Keep the normal equations finite before the linear algebra routines see them.
+        solve_limit = torch.finfo(X_p_star.dtype).max ** 0.5 / max(d, 1)
+        X_back_T = torch.nan_to_num(X_back_T, nan=0.0, posinf=solve_limit, neginf=-solve_limit)
+        X_forward_T = torch.nan_to_num(X_forward_T, nan=0.0, posinf=solve_limit, neginf=-solve_limit)
+        X_back_T = X_back_T.clamp(-solve_limit, solve_limit)
+        X_forward_T = X_forward_T.clamp(-solve_limit, solve_limit)
+        
+        # Ridge keeps the local operator bounded when there are fewer transitions than
+        # operator parameters, which is common for short context windows.
+        identity = torch.eye(d, device=X_p_star.device, dtype=X_p_star.dtype)
+        gram = torch.bmm(X_back_T.transpose(1, 2), X_back_T)
+        rhs = torch.bmm(X_back_T.transpose(1, 2), X_forward_T)
+        ridge_system = gram + self.ridge_lambda * identity.unsqueeze(0)
+        if X_p_star.device.type == "cpu":
+            # gelsd is SVD-based and handles rank-deficient systems robustly.
+            K_loc_T = torch.linalg.lstsq(
+                ridge_system, rhs, driver="gelsd"
+            ).solution
+        else:
+            # PyTorch exposes gelsd only for CPU; this is the equivalent batched
+            # ridge solve and avoids CUDA's full-rank gels assumption.
+            K_loc_T = torch.linalg.solve(ridge_system, rhs)
         K_loc = K_loc_T.transpose(1, 2)  # (B, d, d), returning to the original shape of the local operator
 
         # Creating the final operator as a combination of the global and local operators
