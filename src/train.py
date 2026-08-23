@@ -32,6 +32,7 @@ class Trainer:
         train_loader,
         val_loader,
         lambda_rec: float = 1.0,
+        kl_weight: float = 0.01, # matches reference weight_beta; fixed, not annealed
         device: str = "cpu",
         patience: int = 10,
         checkpoint_dir: str = "checkpoints",
@@ -50,6 +51,7 @@ class Trainer:
         self.grad_clip_norm = grad_clip_norm
         self.use_wandb = use_wandb
         self.seed = seed
+        self.kl_weight = kl_weight
         
         os.makedirs(checkpoint_dir, exist_ok=True)
         self.checkpoint_path = os.path.join(checkpoint_dir, checkpoint_name)
@@ -71,8 +73,8 @@ class Trainer:
             train_kl=[], val_kl=[],
             train_rec=[], val_rec=[],
             skipped_batches=[],
-        )
-        
+        )   
+             
         # Actual training loop
     def fit(self, maxEpochs: int):
         for epoch in range(1, maxEpochs + 1):
@@ -152,6 +154,7 @@ class Trainer:
                     X_C=X_C,
                     X_Rec=X_Rec,
                     lambda_rec=self.lambda_rec,
+                    beta=self.kl_weight,
                 )
                 loss = losses["total"]
             except RuntimeError as e:
@@ -206,6 +209,7 @@ class Trainer:
                     X_C=X_C,
                     X_Rec=X_Rec,
                     lambda_rec=self.lambda_rec,
+                    beta=self.kl_weight, # Check to see if should be in val
                 )
             except RuntimeError as e:
                 print(f"[val] skipped batch: {type(e).__name__}: {e}")
@@ -304,6 +308,7 @@ class Trainer:
                     X_C=X_C,
                     X_Rec=X_Rec,
                     lambda_rec=self.lambda_rec,
+                    beta=self.kl_weight, # Check if should be in test
                 )
             except RuntimeError as e:
                 skipped += 1

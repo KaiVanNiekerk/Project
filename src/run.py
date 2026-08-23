@@ -12,15 +12,6 @@ from plotting import PlotManager
 
 
 def main():
-    # ---- config, the values a person actually changes per run ----
-    #DATASET = "Synthetic.csv"
-    #DATASET_NAME = Path(DATASET).stem
-    #T, L, patch_size = 96, 96, 16
-    #D = 64 # Tune
-    #HIDDEN_DIM = 128
-    #BATCH_SIZE = 32
-    #LR = 1e-3  # Tune
-    
     DATASET_CONFIG_PATH = Path("configs/datasets/ETTh1-L.yaml")
     with DATASET_CONFIG_PATH.open("r", encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
@@ -32,11 +23,14 @@ def main():
     hp = cfg["hyperparameters"]
     D = hp["d"]
     HIDDEN_DIM = hp["hidden_dim"]
+    HIDDEN_LAYERS = hp["hidden_layers"]
     LR = hp["lr"]
     LAMBDA_REC = hp["lambda_rec"]
-    #integ = hp["integrator"]
+    integ = hp["integrator"]
+    KL_WEIGHT = hp["kl_weight"]
     
-    MAX_EPOCHS = 10
+    
+    MAX_EPOCHS = 100
     BATCH_SIZE = 32
     DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
     GENERATE_PLOTS = True  # flip off for quick smoke tests
@@ -54,9 +48,11 @@ def main():
     # ---- model ----
     # Might need to change this if we do want to tune for optimal params here, will use integ from above
     integrator_args = dict(
-        d=D, d_model=D, n_heads=4, d_ff=D * 4, n_layers=2, n=n, m=m, dropout=0.05
+        d=D, d_model=integ["d_model"], n_heads=integ["n_heads"],
+        d_ff=integ["d_ff"], n_layers=integ["n_layers"],
+        n=n, m=m, dropout=integ["dropout"]
     )
-    model = K2VAE(input_dim=input_dim, d=D, m=m, n=n, integrator_args=integrator_args, hidden_dim=HIDDEN_DIM)
+    model = K2VAE(input_dim=input_dim, d=D, m=m, n=n, integrator_args=integrator_args, hidden_dim=HIDDEN_DIM, hidden_layers=HIDDEN_LAYERS)
     optimizer = torch.optim.Adam(model.parameters(), lr=LR)
 
     # ---- train ----
@@ -65,7 +61,8 @@ def main():
         optimizer=optimizer,
         train_loader=train_loader,
         val_loader=val_loader,
-        lambda_rec=LAMBDA_REC, # tuned
+        lambda_rec=LAMBDA_REC,
+        kl_weight=KL_WEIGHT,
         device=DEVICE,
         use_wandb=LOG_TO_WANDB,
         checkpoint_name=f"k2vae_{DATASET_NAME}.pt",

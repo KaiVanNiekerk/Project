@@ -92,11 +92,42 @@ def reconstruction_loss(X_C: torch.Tensor, X_Rec: torch.Tensor, reduction: str =
     Returns:
         torch.Tensor : The computed ELBO loss value.
 """
-def elbo_loss(X_H: torch.Tensor, mu: torch.Tensor, sigma: torch.Tensor, Z_prime: torch.Tensor, P: torch.Tensor) -> torch.Tensor:
-    """L_ELBO = gaussian_nll(...) + kl_divergence_gaussian(...)  (eq. 26)"""
+
+#def elbo_loss(X_H: torch.Tensor, mu: torch.Tensor, sigma: torch.Tensor, Z_prime: torch.Tensor, P: torch.Tensor) -> torch.Tensor:
+#    """L_ELBO = gaussian_nll(...) + kl_divergence_gaussian(...)  (eq. 26)"""
+#    nll = gaussian_nll(X_H, mu, sigma)
+#    kl = kl_divergence_gaussian(Z_prime, P)
+#    return nll + kl
+
+# DEVIATION FROM PAPER (eq. 26): beta-weighted KL instead of an unweighted sum.
+#
+# With beta=1 from epoch 1, D_KL(Z') has a trivial one-line gradient (dKL/dZ' = Z'),
+# available from the first batch, while NLL only improves once Koopman + Kalman +
+# the Integrator jointly learn real structure, which takes many epochs. Gradient
+# descent found the cheap fix first: R inflated to starve the Kalman gain, and the
+# Integrator learned U = -Z, driving Z' = Z + U toward 0 to satisfy KL before mu
+# ever had a chance to become genuinely informative. Confirmed via checkpoint
+# diagnostics (see posterior_collapse_diagnostic.html): rho(K) and Koopman's own
+# forecast were healthy, but ||Z'|| ~0 and diag(P) == I identically, with
+# ||Z|| ~ ||U|| anti-correlated.
+#
+# Ramping beta 0 -> 1 over warmup removes that shortcut early on, so the only
+# way to reduce the loss during warmup is to actually improve mu. beta_warmup_epochs=0
+# reproduces the exact paper objective for baseline/ablation comparison.
+
+# DEVIATION FROM PAPER (eq. 26): fixed KL weight, not the literal unweighted sum.
+# The paper's own reference implementation (config/*/k2vae.yaml, all datasets)
+# trains with weight_beta=0.01 throughout, despite eq. 26 showing an unweighted
+# D_KL. This is a paper-text-vs-code mismatch, not something we invented:
+# beta-annealing toward 1.0 was tried first and still collapsed once the ramp
+# finished (test_kl matched the unweighted baseline to 4 sig figs); the
+# reference's fixed small weight is what actually produced the paper's results.
+
+def elbo_loss(X_H: torch.Tensor, mu: torch.Tensor, sigma: torch.Tensor, Z_prime: torch.Tensor, P: torch.Tensor, beta: float = 0.01) -> torch.Tensor:
+    """L_ELBO = gaussian_nll(...) + beta * kl_divergence_gaussian(...)  (eq. 26, beta-annealed deviation)"""
     nll = gaussian_nll(X_H, mu, sigma)
     kl = kl_divergence_gaussian(Z_prime, P)
-    return nll + kl
+    return nll + beta * kl
 
 """
 
@@ -112,11 +143,28 @@ def elbo_loss(X_H: torch.Tensor, mu: torch.Tensor, sigma: torch.Tensor, Z_prime:
         dict : A dictionary containing the total loss, ELBO loss, negative log likelihood, KL divergence, and reconstruction loss.
     
 """
-def total_loss(X_H: torch.Tensor, mu: torch.Tensor, sigma: torch.Tensor, Z_prime: torch.Tensor, P: torch.Tensor, X_C: torch.Tensor, X_Rec: torch.Tensor, lambda_rec: float = 1.0) -> dict:
-    """L = L_ELBO + lambda_rec * L_Rec"""
+#def total_loss(X_H: torch.Tensor, mu: torch.Tensor, sigma: torch.Tensor, Z_prime: torch.Tensor, P: torch.Tensor, X_C: torch.Tensor, X_Rec: torch.Tensor, lambda_rec: float = 1.0) -> dict:
+#    """L = L_ELBO + lambda_rec * L_Rec"""
+#    nll = gaussian_nll(X_H, mu, sigma)
+#    kl = kl_divergence_gaussian(Z_prime, P)
+#    elbo = nll + kl
+#    rec = reconstruction_loss(X_C, X_Rec)
+#    total = elbo + lambda_rec * rec
+#
+#    return {
+#        "total": total,
+#        "elbo": elbo,
+#        "nll": nll,
+#        "kl": kl,
+#        "rec": rec,
+#    }
+    
+def total_loss(X_H: torch.Tensor, mu: torch.Tensor, sigma: torch.Tensor, Z_prime: torch.Tensor, P: torch.Tensor, X_C: torch.Tensor, X_Rec: torch.Tensor, lambda_rec: float = 1.0, beta: float = 0.01) -> dict:
+    """L = L_ELBO(beta) + lambda_rec * L_Rec. kl returned unweighted (raw D_KL) so
+    the true elbo (nll + kl) can always be reconstructed regardless of beta."""
     nll = gaussian_nll(X_H, mu, sigma)
     kl = kl_divergence_gaussian(Z_prime, P)
-    elbo = nll + kl
+    elbo = nll + beta * kl
     rec = reconstruction_loss(X_C, X_Rec)
     total = elbo + lambda_rec * rec
 
@@ -126,4 +174,5 @@ def total_loss(X_H: torch.Tensor, mu: torch.Tensor, sigma: torch.Tensor, Z_prime
         "nll": nll,
         "kl": kl,
         "rec": rec,
+        "beta": beta,
     }

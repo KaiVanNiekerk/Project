@@ -8,7 +8,7 @@ from integrator import Integrator
 from kalman import KalmanNet
 
 class K2VAE(nn.Module):
-    def __init__(self, input_dim: int, d: int, m: int, n: int, integrator_args: dict, hidden_dim: int = 128):
+    def __init__(self, input_dim: int, d: int, m: int, n: int, integrator_args: dict, hidden_dim: int = 128, hidden_layers: int = 3):
         """
         Args:
             input_dim (int): The size of a flattened multivariate patch (Variables * Patch Size).
@@ -17,6 +17,7 @@ class K2VAE(nn.Module):
             n (int): The number of patches in the past context window.
             integrator_args (dict): Hyperparameters for the Integrator Transformer network.
             hidden_dim (int, optional): Number of neurons in the hidden layers of the MLPs. Defaults to 128.
+            hidden_layers (int, optional): Number of hidden layers in the decoder MLPs. Defaults to 3.
         """
         super().__init__()
         self.d = d
@@ -29,18 +30,16 @@ class K2VAE(nn.Module):
         self.kalman = KalmanNet(state_dim = d) # # Refines linear state predictions and outputs process uncertainty (covariance)
 
         # Decodes latent states back into the mean of the original input dimensions
-        self.decoder_mu = nn.Sequential(
-            nn.Linear(d, hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, input_dim)
-        )
-
-        # Decodes latent states back into the variance scale of the original input dimensions
-        self.decoder_sigma = nn.Sequential(
-            nn.Linear(d, hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, input_dim),
-        )
+        # make decoder allows for multipel hidden layers.
+        def _make_decoder(hidden_layers: int) -> nn.Sequential:
+            layers = [nn.Linear(d, hidden_dim), nn.ReLU()]
+            for _ in range(hidden_layers - 1):
+                layers += [nn.Linear(hidden_dim, hidden_dim), nn.ReLU()]
+            layers.append(nn.Linear(hidden_dim, input_dim))
+            return nn.Sequential(*layers)
+        
+        self.decoder_mu = _make_decoder(hidden_layers=hidden_layers)
+        self.decoder_sigma = _make_decoder(hidden_layers=hidden_layers)
 
     def reparameterize(self, Z_prime: torch.Tensor, P: torch.Tensor) -> torch.Tensor:
         """
