@@ -42,6 +42,30 @@ def gaussian_nll(Y: torch.Tensor, mu: torch.Tensor, sigma: torch.Tensor, reducti
     Returns:
         torch.Tensor : The computed loss value, reduced according to the specified method.
 """
+
+# def kl_divergence_gaussian(Z_prime: torch.Tensor, P: torch.Tensor, reduction: str = "mean") -> torch.Tensor:
+#     """D_KL(Q(Z|X) || P(Z|X)), Q(Z|X) = N(Z', P), P(Z|X) = N(0, I)  (eq. 26)"""
+#     B, d, m = Z_prime.shape
+#     Z_prime_T = Z_prime.transpose(1, 2)  # (B, m, d)
+#     jitter = torch.eye(d, device=P.device).expand_as(P) * 1e-6 # Ensure it remains differentiable and numerically stable
+#     Q = MultivariateNormal(loc=Z_prime_T, covariance_matrix=P + jitter)
+    
+#     prior_mean = torch.zeros_like(Z_prime_T)
+#     prior_cov = torch.eye(d, device=P.device).expand(B, m, d, d)
+#     prior = MultivariateNormal(loc=prior_mean, covariance_matrix=prior_cov)
+
+#     kl_per_step = kl_divergence(Q, prior)   # (B, m)
+#     kl_per_batch = kl_per_step.sum(dim=1)   # sum over the m horizon steps -> (B,)
+
+#     if reduction == "mean":
+#         return kl_per_batch.mean()
+#     elif reduction == "sum":
+#         return kl_per_batch.sum()
+#     elif reduction == "none":
+#         return kl_per_batch
+#     else:
+#         raise ValueError(f"Unknown reduction: {reduction}") 
+
 def kl_divergence_gaussian(Z_prime: torch.Tensor, P: torch.Tensor, reduction: str = "mean") -> torch.Tensor:
     """D_KL(Q(Z|X) || P(Z|X)), Q(Z|X) = N(Z', P), P(Z|X) = N(0, I)  (eq. 26)"""
     B, d, m = Z_prime.shape
@@ -54,7 +78,10 @@ def kl_divergence_gaussian(Z_prime: torch.Tensor, P: torch.Tensor, reduction: st
     prior = MultivariateNormal(loc=prior_mean, covariance_matrix=prior_cov)
 
     kl_per_step = kl_divergence(Q, prior)   # (B, m)
-    kl_per_batch = kl_per_step.sum(dim=1)   # sum over the m horizon steps -> (B,)
+    
+    # Average across the horizon dimension (m) instead of summing.
+    # This aligns the KL scale with the NLL and MSE 'mean' reductions.
+    kl_per_batch = kl_per_step.mean(dim=1)   # -> (B,)
 
     if reduction == "mean":
         return kl_per_batch.mean()

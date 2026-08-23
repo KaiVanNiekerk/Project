@@ -52,9 +52,9 @@ def split(df: pd.DataFrame, train_frac: float, val_frac: float) -> tuple[pd.Data
 def scale(train_df: pd.DataFrame, val_df: pd.DataFrame, test_df: pd.DataFrame) -> tuple[np.ndarray, np.ndarray, np.ndarray, StandardScaler]:
     scaler = StandardScaler()
     scaler.fit(train_df.values) # only train on trainign data
-    train_scaled = scaler.transform(train_df)
-    val_scaled = scaler.transform(val_df)
-    test_scaled = scaler.transform(test_df)
+    train_scaled = scaler.transform(train_df.values)
+    val_scaled = scaler.transform(val_df.values)
+    test_scaled = scaler.transform(test_df.values)
     return train_scaled, val_scaled, test_scaled, scaler
 
 """A custom dataset for creating sliding window data.

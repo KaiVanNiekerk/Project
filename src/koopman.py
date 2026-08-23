@@ -4,10 +4,17 @@ from einops import rearrange
 import math
 
 class KoopmanNet(nn.Module):
-    def __init__(self, d: int, hidden_dim: int = 128, ridge_lambda: float = 1e-3):
+    def __init__(
+        self,
+        d: int,
+        hidden_dim: int = 128,
+        ridge_lambda: float = 1e-3,
+        max_operator_norm: float = 1.0,
+    ):
         super().__init__()
         self.d = d
         self.ridge_lambda = ridge_lambda
+        self.max_operator_norm = max_operator_norm
 
         # Measurement function as structured in their koopman configuration 
         self.measurement_function = nn.Sequential(
@@ -65,22 +72,32 @@ class KoopmanNet(nn.Module):
         # Ridge keeps the local operator bounded when there are fewer transitions than
         # operator parameters, which is common for short context windows.
         identity = torch.eye(d, device=X_p_star.device, dtype=X_p_star.dtype)
-        gram = torch.bmm(X_back_T.transpose(1, 2), X_back_T)
-        rhs = torch.bmm(X_back_T.transpose(1, 2), X_forward_T)
-        ridge_system = gram + self.ridge_lambda * identity.unsqueeze(0)
+        ridge_rows = math.sqrt(self.ridge_lambda) * identity.unsqueeze(0).expand(B, -1, -1)
+        ridge_system = torch.cat((X_back_T, ridge_rows), dim=1)
+        ridge_rhs = torch.cat(
+            (X_forward_T, torch.zeros(B, d, d, device=X_p_star.device, dtype=X_p_star.dtype)),
+            dim=1,
+        )
         if X_p_star.device.type == "cpu":
             # gelsd is SVD-based and handles rank-deficient systems robustly.
             K_loc_T = torch.linalg.lstsq(
-                ridge_system, rhs, driver="gelsd"
+                ridge_system, ridge_rhs, driver="gelsd"
             ).solution
         else:
-            # PyTorch exposes gelsd only for CPU; this is the equivalent batched
-            # ridge solve and avoids CUDA's full-rank gels assumption.
-            K_loc_T = torch.linalg.solve(ridge_system, rhs)
+            # PyTorch exposes gelsd only for CPU; the augmented ridge system has
+            # full column rank, so CUDA's QR-based driver is appropriate here.
+            K_loc_T = torch.linalg.lstsq(
+                ridge_system, ridge_rhs, driver="gels"
+            ).solution
         K_loc = K_loc_T.transpose(1, 2)  # (B, d, d), returning to the original shape of the local operator
 
         # Creating the final operator as a combination of the global and local operators
         K = K_loc + self.K_glo.unsqueeze(0).repeat(B, 1, 1)  # (B, d, d), adds batch dimension to the global operator and combines it with the local operator
+
+        # Bound repeated rollout amplification while preserving the learned operator direction.
+        operator_norm = torch.linalg.matrix_norm(K, ord=2, dim=(1, 2), keepdim=True)
+        norm_scale = torch.clamp(self.max_operator_norm / operator_norm.clamp_min(1e-12), max=1.0)
+        K = K * norm_scale
 
         # NaN error handling: If K has NaN values, replace it with the identity matrix 
         # to avoid propagation of errors in the reconstruction and prediction steps.

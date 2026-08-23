@@ -12,7 +12,7 @@ from plotting import PlotManager
 
 
 def main():
-    DATASET_CONFIG_PATH = Path("configs/datasets/ETTh1-L.yaml")
+    DATASET_CONFIG_PATH = Path("configs/datasets_yaml/ETTh1-L.yaml")
     with DATASET_CONFIG_PATH.open("r", encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
 
@@ -30,7 +30,7 @@ def main():
     KL_WEIGHT = hp["kl_weight"]
     
     
-    MAX_EPOCHS = 100
+    MAX_EPOCHS = 10
     BATCH_SIZE = 32
     DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
     GENERATE_PLOTS = True  # flip off for quick smoke tests
