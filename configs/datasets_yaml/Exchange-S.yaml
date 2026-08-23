@@ -1,0 +1,20 @@
+dataset_name: Exchange-S
+csv_path: exchange_rate/exchange_rate.csv
+num_features: 8
+patch_size: 10
+input_window: 30
+horizon_window: 30
+feature_names: ["0", "1", "2", "3", "4", "5", "6", OT]
+hyperparameters: # NEED to decice on these
+  lr: 1.0e-3
+  d: 64
+  lambda_rec: 1.0
+  hidden_dim: 128
+  #integrator:
+  #  d_model: 64
+  #  n_heads: 4
+  #  d_ff: 256
+  #  n_layers: 2
+  #   dropout: 0.05
+  tuned: false
+  sweep_id: null

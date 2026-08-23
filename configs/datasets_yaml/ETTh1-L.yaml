@@ -1,0 +1,22 @@
+dataset_name: ETTh1-L
+csv_path: ETT-small/ETTh1.csv
+num_features: 7
+patch_size: 24
+input_window: 96
+horizon_window: 96   # paper sweeps L in {96, 192, 336, 720}; this is the first setting
+feature_names: [HUFL, HULL, MUFL, MULL, LUFL, LULL, OT]
+hyperparameters:
+  lr: 1.0e-3
+  d: 128     
+  lambda_rec: 1.0
+  hidden_dim: 256  
+  hidden_layers: 3 
+  kl_weight: 0.01 
+  integrator:
+    d_model: 128   
+    n_heads: 4
+    d_ff: 256      
+    n_layers: 1    
+    dropout: 0.1
+  tuned: false
+  sweep_id: null
