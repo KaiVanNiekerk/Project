@@ -77,7 +77,7 @@ The K2VAE paper addresses this by combining three ideas that are individually us
 2. A Koopman-inspired linearisation step that makes the latent temporal dynamics easier to model.
 3. A KalmanNet-style refinement mechanism that improves the latent state estimate and models process uncertainty.
 
-The core question for this project is whether that combination produces a forecasting model that is meaningfully better than the state-of-the-art baselines reported in the paper on long-horizon probabilistic forecasting tasks, especially when the data contain nonlinear structure, multivariate interactions, and forecast drift. The project is therefore not just about reproducing the paper’s architecture; it is about testing whether the architectural choices give a real forecasting advantage.
+The core question for this project is whether that combination produces a forecasting model that is meaningfully better than the state-of-the-art baselines reported in the paper on long-horizon probabilistic forecasting tasks, especially when the data contain nonlinear structure, multivariate interactions, and forecast drift. The project is therefore not just about reproducing the paper’s architecture; it is about testing whether the architectural choices give a real forecasting advantage. # I want to flag something here is part of the PS not also staying true to the paper equations and evaluating whether or not their code leaves out any important model features?
 
 ### Literature Review
 
