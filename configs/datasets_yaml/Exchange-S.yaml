@@ -5,16 +5,18 @@ patch_size: 10
 input_window: 30
 horizon_window: 30
 feature_names: ["0", "1", "2", "3", "4", "5", "6", OT]
-hyperparameters: # NEED to decice on these
+hyperparameters:
   lr: 1.0e-3
   d: 64
   lambda_rec: 1.0
   hidden_dim: 128
-  #integrator:
-  #  d_model: 64
-  #  n_heads: 4
-  #  d_ff: 256
-  #  n_layers: 2
-  #   dropout: 0.05
+  hidden_layers: 3
+  kl_weight: 0.01
+  integrator:
+    d_model: 64
+    n_heads: 4
+    d_ff: 256
+    n_layers: 1
+    dropout: 0.01
   tuned: false
   sweep_id: null
