@@ -12,7 +12,7 @@ from plotting import PlotManager
 
 
 def main():
-    DATASET_CONFIG_PATH = Path("configs/datasets_yaml/ETTm1-L.yaml")
+    DATASET_CONFIG_PATH = Path("configs/datasets_yaml/ETTh1-L.yaml")
     with DATASET_CONFIG_PATH.open("r", encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
 
@@ -50,10 +50,10 @@ def main():
     integrator_args = dict(
         d=D, d_model=integ["d_model"], n_heads=integ["n_heads"],
         d_ff=integ["d_ff"], n_layers=integ["n_layers"],
-        n=n, m=m, dropout=integ["dropout"]
+        n=n, m=m, dropout=integ["dropout"] # adjust this dropout value to be higher 
     )
     model = K2VAE(input_dim=input_dim, d=D, m=m, n=n, integrator_args=integrator_args, hidden_dim=HIDDEN_DIM, hidden_layers=HIDDEN_LAYERS)
-    optimizer = torch.optim.Adam(model.parameters(), lr=LR)
+    optimizer = torch.optim.Adam(model.parameters(), lr=LR, weight_decay=1e-4)
 
     # ---- train ----
     trainer = Trainer(

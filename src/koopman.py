@@ -10,11 +10,13 @@ class KoopmanNet(nn.Module):
         hidden_dim: int = 128,
         ridge_lambda: float = 1e-3,
         max_operator_norm: float = 1.0,
+        koopman_mode: str = "mixed"  # Options: "static", "dynamic", "mixed"
     ):
         super().__init__()
         self.d = d
         self.ridge_lambda = ridge_lambda
         self.max_operator_norm = max_operator_norm
+        self.koopman_mode = koopman_mode
 
         # Measurement function as structured in their koopman configuration 
         self.measurement_function = nn.Sequential(
@@ -53,46 +55,56 @@ class KoopmanNet(nn.Module):
         # Restore the column-vector convention required for the upcoming eDMD matrix algebra
         X_p_star = rearrange(X_p_star, 'b n d -> b d n')
 
-        # Get local operator, uses one-step extended Dynamic Mode Decomposition (eDMD) 
-        # to find the line of best fit representing the system's dynamics for each specific batch
-        X_back = X_p_star[:, :, :-1]  # (B, d, n-1), the past, all patches except the last one
-        X_forward = X_p_star[:, :, 1:]  # (B, d, n-1), the future, all patches except the first one
-        
-        # Solve X_back^T * K^T = X_fore^T, then transpose the result (this is to follow the convention of the original paper)
-        X_back_T = X_back.transpose(1, 2)  # (B, n-1, d)
-        X_forward_T = X_forward.transpose(1, 2)  # (B, n-1, d)
-
-        # Keep the normal equations finite before the linear algebra routines see them.
-        solve_limit = torch.finfo(X_p_star.dtype).max ** 0.5 / max(d, 1)
-        X_back_T = torch.nan_to_num(X_back_T, nan=0.0, posinf=solve_limit, neginf=-solve_limit)
-        X_forward_T = torch.nan_to_num(X_forward_T, nan=0.0, posinf=solve_limit, neginf=-solve_limit)
-        X_back_T = X_back_T.clamp(-solve_limit, solve_limit)
-        X_forward_T = X_forward_T.clamp(-solve_limit, solve_limit)
-        
-        # Ridge keeps the local operator bounded when there are fewer transitions than
-        # operator parameters, which is common for short context windows.
-        identity = torch.eye(d, device=X_p_star.device, dtype=X_p_star.dtype)
-        ridge_rows = math.sqrt(self.ridge_lambda) * identity.unsqueeze(0).expand(B, -1, -1)
-        ridge_system = torch.cat((X_back_T, ridge_rows), dim=1)
-        ridge_rhs = torch.cat(
-            (X_forward_T, torch.zeros(B, d, d, device=X_p_star.device, dtype=X_p_star.dtype)),
-            dim=1,
-        )
-        if X_p_star.device.type == "cpu":
-            # gelsd is SVD-based and handles rank-deficient systems robustly.
-            K_loc_T = torch.linalg.lstsq(
-                ridge_system, ridge_rhs, driver="gelsd"
-            ).solution
+        if self.koopman_mode == "dynamic":
+            
+            # Bypasses the expensive and potentially unstable eDMD solve entirely for smaller datasets
+            K = self.K_glo.unsqueeze(0).repeat(B, 1, 1)
         else:
-            # PyTorch exposes gelsd only for CPU; the augmented ridge system has
-            # full column rank, so CUDA's QR-based driver is appropriate here.
-            K_loc_T = torch.linalg.lstsq(
-                ridge_system, ridge_rhs, driver="gels"
-            ).solution
-        K_loc = K_loc_T.transpose(1, 2)  # (B, d, d), returning to the original shape of the local operator
+            # Get local operator, uses one-step extended Dynamic Mode Decomposition (eDMD) 
+            # to find the line of best fit representing the system's dynamics for each specific batch
+            X_back = X_p_star[:, :, :-1]  # (B, d, n-1), the past, all patches except the last one
+            X_forward = X_p_star[:, :, 1:]  # (B, d, n-1), the future, all patches except the first one
+            
+            # Solve X_back^T * K^T = X_fore^T, then transpose the result (this is to follow the convention of the original paper)
+            X_back_T = X_back.transpose(1, 2)  # (B, n-1, d)
+            X_forward_T = X_forward.transpose(1, 2)  # (B, n-1, d)
 
-        # Creating the final operator as a combination of the global and local operators
-        K = K_loc + self.K_glo.unsqueeze(0).repeat(B, 1, 1)  # (B, d, d), adds batch dimension to the global operator and combines it with the local operator
+            # Keep the normal equations finite before the linear algebra routines see them.
+            solve_limit = torch.finfo(X_p_star.dtype).max ** 0.5 / max(d, 1)
+            X_back_T = torch.nan_to_num(X_back_T, nan=0.0, posinf=solve_limit, neginf=-solve_limit)
+            X_forward_T = torch.nan_to_num(X_forward_T, nan=0.0, posinf=solve_limit, neginf=-solve_limit)
+            X_back_T = X_back_T.clamp(-solve_limit, solve_limit)
+            X_forward_T = X_forward_T.clamp(-solve_limit, solve_limit)
+            
+            # Ridge keeps the local operator bounded when there are fewer transitions than
+            # operator parameters, which is common for short context windows.
+            identity = torch.eye(d, device=X_p_star.device, dtype=X_p_star.dtype)
+            ridge_rows = math.sqrt(self.ridge_lambda) * identity.unsqueeze(0).expand(B, -1, -1)
+            ridge_system = torch.cat((X_back_T, ridge_rows), dim=1)
+            ridge_rhs = torch.cat(
+                (X_forward_T, torch.zeros(B, d, d, device=X_p_star.device, dtype=X_p_star.dtype)),
+                dim=1,
+            )
+            if X_p_star.device.type == "cpu":
+                # gelsd is SVD-based and handles rank-deficient systems robustly.
+                K_loc_T = torch.linalg.lstsq(
+                    ridge_system, ridge_rhs, driver="gelsd"
+                ).solution
+            else:
+                # PyTorch exposes gelsd only for CPU; the augmented ridge system has
+                # full column rank, so CUDA's QR-based driver is appropriate here.
+                K_loc_T = torch.linalg.lstsq(
+                    ridge_system, ridge_rhs, driver="gels"
+                ).solution
+            K_loc = K_loc_T.transpose(1, 2)  # (B, d, d), returning to the original shape of the local operator
+
+            if self.koopman_mode == "static":
+                K = K_loc
+            elif self.koopman_mode == "mixed":
+                # Creating the final operator as a combination of the global and local operators
+                K = K_loc + self.K_glo.unsqueeze(0).repeat(B, 1, 1)  # (B, d, d), adds batch dimension to the global operator and combines it with the local operator
+            else:
+                raise ValueError(f"Unknown koopman_mode: {self.koopman_mode}")
 
         # Bound repeated rollout amplification while preserving the learned operator direction.
         operator_norm = torch.linalg.matrix_norm(K, ord=2, dim=(1, 2), keepdim=True)

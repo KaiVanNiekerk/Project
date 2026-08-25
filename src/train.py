@@ -199,6 +199,10 @@ class Trainer:
  
             try:
                 X_Rec, mu, sigma, Z_prime, P = self.model(X_C)
+
+                #can be removed later 
+                if n_batches == 0: # Just print for the first batch to avoid spam
+                    print(f"[Epoch {epoch} Val] Sigma Mean: {sigma.mean().item():.6f}, Sigma Min: {sigma.min().item():.6f}")
  
                 losses = total_loss(
                     X_H=X_H,
