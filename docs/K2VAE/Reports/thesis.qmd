@@ -261,3 +261,46 @@ Z = \mu + \sigma \odot \epsilon, \quad \epsilon \sim \mathcal{N}(0, I)
 $$
 
 Rather than a standard neural network encoder and decoder architecture, we use a KoopmanNet, an Integrator, and a KalmanNet to form our encoder. This projects the input time-series into a latent measurement space, processes the nonlinear residuals, and refines the latent state estimate, returning an approximate posterior distribution. The decoder acts as an inverse measurement function, mapping the latent representation back to the original observation space. This allows us to generate future predictions while also providing a measure of uncertainty in our forecasts.
+
+## K2VAE
+
+### Pre-processing
+
+The pipeline below is applied to all datasets assessed within this work. We have selected four of the original paper datasets in order to compare with their benchmarks. These datasets have all been pre-cleaned and prepared by the original authors and we have only extracted them. These are ... We will also be evaluating the model on two of our own datasets. We have manually cleaned and prepared them for input into the model's pre-processing pipeline.
+
+The K2VAE model treats Probablistic Time Series Forecasting (PTSF) as a conditional generative task. Given a multivariate context series:
+
+$$
+X = [x_1, x_2, \dots, x_T] \in \mathbb{R}^{N \times T}
+$$
+
+the objective is to model the conditional distribution over the forecasting horizon
+
+$$
+Y = [x_{T+1}, x_{T+2}, \dots, x_{T+L}] \in \mathbb{R}^{N \times L}, \qquad P(Y \mid X)
+$$
+
+where $N$ is the number of variables, $T$ the context length, and $L$ the forecasting horizon.
+
+The series is split into three sets, namely the training set ($p_\text{train}$), the validation set ($p_\text{val}$) and the test set ($p_\text{test}$). These three sets are split as in to keep temporal order and thus have not been shuffled in order to preserve the nature of the time series. We have used a split of 0.75, 0.15 and 0.15 respectively. We then apply standardisation to the training data which is then applied to the validation and test sets in order to prevent any leakage.
+
+A single training instance is fromed by a sliding window of length $T + L$ applied across the standardised time series ($\tilde{x}$), one step at a time offset by i:
+
+$$
+X^{(i)} = [\tilde{x}_i, \dots, \tilde{x}_{i+T-1}], \qquad
+Y^{(i)} = [\tilde{x}_{i+T}, \dots, \tilde{x}_{i+T+L-1}]
+$$
+Where the number of windows for some sequence M = $\text{length(M)} - T - L + 1 $
+
+Each $X^{(i)}$ is then split into n overlapping patches of size s.
+$$
+X \in \mathbb{R}^{N \times T} \;\longrightarrow\; X^P \in \mathbb{R}^{N \times s \times n}, \qquad T = n \cdot s
+$$
+
+Each patch is then flattened across variables and with-in patch time and then projected to an embedding of dimension $d$. The projection weights are again only fitted using the training data to prevent leakage.
+
+$$
+X^{P'} = \mathrm{Projection}\big(\mathrm{Flatten}(X^P)\big) \in \mathbb{R}^{d \times n}
+$$
+
+This data will the be treated as the input data into KoopmanNet.
