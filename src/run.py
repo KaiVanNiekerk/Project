@@ -12,7 +12,7 @@ from plotting import PlotManager
 
 
 def main():
-    DATASET_CONFIG_PATH = Path("configs/datasets_yaml/ETTh1-L.yaml")
+    DATASET_CONFIG_PATH = Path("configs/datasets_yaml/ETTm1-L.yaml")
     with DATASET_CONFIG_PATH.open("r", encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
 
@@ -104,7 +104,10 @@ def main():
             inverse_scale=True,
         )
 
-        forecast_fig = plot_manager.plot_forecast_vs_truth(forecast_batch, feature_idx=0)
+        # Grab up to the first 6 features safely (prevents crashing if a dataset has fewer than 6)
+        features_to_plot = list(range(min(6, num_features)))
+        forecast_fig = plot_manager.plot_forecast_vs_truth(forecast_batch, feature_idx=features_to_plot)
+
         plot_manager.save(forecast_fig, "forecast_vs_truth")
 
         residuals = PlotDataCollector.compute_horizon_residuals(forecast_batch)
