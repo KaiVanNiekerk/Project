@@ -28,7 +28,7 @@ def crps(samples: torch.Tensor, x: torch.Tensor, sample_dim: int = 0) -> torch.T
 
     Rather than numerically integrating F_hat against the indicator function,
     this uses the standard closed-form identity for CRPS of an empirical
-    distribution (this is algebraically exact for the empirical CDF -- not
+    distribution (this is algebraically exact for the empirical CDF, not
     an approximation, and not the quantile-loss discretization ProbTS uses):
 
         CRPS(F_n, x) = E|X - x| - 0.5 * E|X - X'|

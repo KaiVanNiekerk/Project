@@ -121,7 +121,7 @@ class K2VAE(nn.Module):
         reconstructed_X_H_mu = self.decoder_mu(Z_sample_T).transpose(1, 2) # (B, input_dim, m)
 
         reconstructed_X_H_sigma = self.decoder_sigma(Z_sample_T).transpose(1, 2) # (B, input_dim, m)
-        reconstructed_X_H_sigma = F.softplus(reconstructed_X_H_sigma) + 1e-1  # Ensure positive variance
+        reconstructed_X_H_sigma = F.softplus(reconstructed_X_H_sigma) + 1e-6  # Ensure positive variance
 
         return reconstructed_X_C_mu, reconstructed_X_H_mu, reconstructed_X_H_sigma, Z_prime, P
 
@@ -156,7 +156,7 @@ class K2VAE(nn.Module):
 
             mu = self.decoder_mu(Z_sample_T).transpose(1, 2)      # (B, input_dim, m)
             sigma = self.decoder_sigma(Z_sample_T).transpose(1, 2)
-            sigma = F.softplus(sigma) + 1e-1
+            sigma = F.softplus(sigma) + 1e-6
 
             y_sample = Normal(mu, sigma).rsample()
             samples.append(y_sample)
