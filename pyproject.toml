@@ -49,9 +49,9 @@ dependencies = [
     "sentry-sdk==2.64.0",
     "six==1.17.0",
     "smmap==5.0.3",
-    "sympy==1.14.0",
+    "sympy>=1.13.1",
     "threadpoolctl==3.6.0",
-    "torch==2.12.1",
+    "torch>=2.6.0",
     "tqdm==4.68.3",
     "typing-extensions==4.16.0",
     "typing-inspection==0.4.2",
@@ -64,11 +64,13 @@ dependencies = [
 project = "project:main"
 
 [tool.uv.sources]
-torch = { index = "pytorch-cpu" }
+torch = { index = "pytorch-cu124" }
+torchvision = { index = "pytorch-cu124" }
+torchaudio = { index = "pytorch-cu124" }
 
 [[tool.uv.index]]
-name = "pytorch-cpu"
-url = "https://download.pytorch.org/whl/cpu"
+name = "pytorch-cu124"
+url = "https://download.pytorch.org/whl/cu124"
 explicit = true
 
 [build-system]
