@@ -52,10 +52,15 @@ class PlotManager:
             raise ValueError("epoch, train_total, and val_total must be the same length")
 
         figures: List[plt.Figure] = []
+        # A one-epoch history has no visible line segment; mark its point so
+        # smoke-test plots still show the recorded values.
+        marker = "o" if len(history.epoch) == 1 else None
 
         fig_total, ax = plt.subplots(figsize=(8, 4))
-        ax.plot(history.epoch, history.train_total, label="train_total")
-        ax.plot(history.epoch, history.val_total, label="val_total")
+        ax.plot(history.epoch, history.train_total, marker=marker, label="train_total")
+        ax.plot(history.epoch, history.val_total, marker=marker, label="val_total")
+        if len(history.epoch) == 1:
+            ax.set_xlim(history.epoch[0] - 0.5, history.epoch[0] + 0.5)
         ax.set_title(f"{self.cfg.dataset_name}: Total Loss")
         ax.set_xlabel("Epoch")
         ax.set_ylabel("Loss")
@@ -84,8 +89,10 @@ class PlotManager:
                 if len(available) == 1:
                     axes = [axes]
                 for ax_i, name in zip(axes, available):
-                    ax_i.plot(history.epoch, train_map[name], label=f"train_{name}")
-                    ax_i.plot(history.epoch, val_map[name], label=f"val_{name}")
+                    ax_i.plot(history.epoch, train_map[name], marker=marker, label=f"train_{name}")
+                    ax_i.plot(history.epoch, val_map[name], marker=marker, label=f"val_{name}")
+                    if len(history.epoch) == 1:
+                        ax_i.set_xlim(history.epoch[0] - 0.5, history.epoch[0] + 0.5)
                     ax_i.set_ylabel(name)
                     ax_i.grid(alpha=0.3)
                     ax_i.legend()

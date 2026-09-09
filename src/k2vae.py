@@ -1,14 +1,17 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from einops import rearrange
 from torch.distributions.normal import Normal
 from torch.distributions.multivariate_normal import MultivariateNormal
 from koopman import KoopmanNet
 from integrator import Integrator
 from kalman import KalmanNet
+from preprocessing import k2vae_integration
+from revIN import RevIN
 
 class K2VAE(nn.Module):
-    def __init__(self, input_dim: int, d: int, m: int, n: int, integrator_args: dict, hidden_dim: int = 128, hidden_layers: int = 3):
+    def __init__(self, input_dim: int, d: int, m: int, n: int, integrator_args: dict, num_vars: int, patch_size: int, hidden_dim: int = 128, hidden_layers: int = 3, sigma_floor: float = 5e-2):
         """
         Args:
             input_dim (int): The size of a flattened multivariate patch (Variables * Patch Size).
@@ -18,11 +21,17 @@ class K2VAE(nn.Module):
             integrator_args (dict): Hyperparameters for the Integrator Transformer network.
             hidden_dim (int, optional): Number of neurons in the hidden layers of the MLPs. Defaults to 128.
             hidden_layers (int, optional): Number of hidden layers in the decoder MLPs. Defaults to 3.
+            sigma_floor (float, optional): Minimum output standard deviation in
+                standardized data space. Defaults to 0.05.
         """
         super().__init__()
         self.d = d
         self.m = m
         self.n = n
+        self.num_vars = num_vars
+        self.patch_size = patch_size
+        self.sigma_floor = sigma_floor
+        self.revin = RevIN(num_vars=num_vars, affine=True)
 
         self.patch_embedding = nn.Linear(input_dim, d) # Projects the input patches to the latent measurement space 
         self.koopman = KoopmanNet(d = d, hidden_dim = hidden_dim)  # Evaluates the measurement function and Koopman operator 
@@ -80,8 +89,9 @@ class K2VAE(nn.Module):
             X_C_hat (torch.Tensor): (Batch, d, n), needed by forward() for
                 reconstructed_X_C_mu but not by sample_predictive()
         """
-        x_T = x.transpose(1, 2)
-        X_p_prime_T = self.patch_embedding(x_T)
+        x_norm = self.revin(x, mode="norm")
+        x_patched = k2vae_integration(x_norm, self.patch_size)
+        X_p_prime_T = self.patch_embedding(x_patched.transpose(1, 2))
         X_p_prime = X_p_prime_T.transpose(1, 2)
 
         z_star, X_C_hat, X_H_hat = self.koopman(X_p_prime, self.m)
@@ -95,6 +105,31 @@ class K2VAE(nn.Module):
         Z_prime, P = self.kalman(z_0, U, X_H_hat)
 
         return Z_prime, P, X_C_hat
+
+    def _decode_mean(self, latent: torch.Tensor) -> torch.Tensor:
+        """Decode latent patches and restore temporal layout and data scale."""
+        decoded = self.decoder_mu(latent.transpose(1, 2)).transpose(1, 2)
+        # Decoder outputs are flattened patches; restore time and variables
+        # before applying the context statistics saved by RevIN.
+        decoded_time = rearrange(
+            decoded, "B (N s) p -> B (p s) N", N=self.num_vars, s=self.patch_size
+        )
+        return self.revin(decoded_time, mode="denorm")
+
+    def _decode_sigma(self, latent: torch.Tensor) -> torch.Tensor:
+        """Decode positive uncertainty and restore it to the input data scale."""
+        logits = self.decoder_sigma(latent.transpose(1, 2)).transpose(1, 2)
+        # Sigma is a positive spread, so apply softplus before denormalization.
+        sigma_norm = F.softplus(
+            rearrange(
+                logits, "B (N s) p -> B (p s) N", N=self.num_vars, s=self.patch_size
+            )
+        ) + 1e-6
+        # Add the floor rather than hard-clamping so the decoder keeps a useful
+        # gradient even when its predicted uncertainty is near the minimum.
+        # Keep uncertainty away from zero so the Gaussian NLL cannot become
+        # numerically extreme when a forecast error is nonzero.
+        return self.revin.denormalize_sigma(sigma_norm) + self.sigma_floor
 
     def forward(self, x: torch.Tensor):
         """
@@ -114,14 +149,9 @@ class K2VAE(nn.Module):
         Z_sample = self.reparameterize(Z_prime, P)  # (B, d, m), this is the sampled latent states from Q(Z|X) 
 
         # Decode the sampled latent states to reconstruct the input data
-        X_C_hat_T = X_C_hat.transpose(1, 2)  # (B, n, d)
-        reconstructed_X_C_mu = self.decoder_mu(X_C_hat_T).transpose(1, 2) # (B, input_dim, n)
-
-        Z_sample_T = Z_sample.transpose(1, 2)  # (B, m, d)
-        reconstructed_X_H_mu = self.decoder_mu(Z_sample_T).transpose(1, 2) # (B, input_dim, m)
-
-        reconstructed_X_H_sigma = self.decoder_sigma(Z_sample_T).transpose(1, 2) # (B, input_dim, m)
-        reconstructed_X_H_sigma = F.softplus(reconstructed_X_H_sigma) + 1e-6  # Ensure positive variance
+        reconstructed_X_C_mu = self._decode_mean(X_C_hat)
+        reconstructed_X_H_mu = self._decode_mean(Z_sample)
+        reconstructed_X_H_sigma = self._decode_sigma(Z_sample)
 
         return reconstructed_X_C_mu, reconstructed_X_H_mu, reconstructed_X_H_sigma, Z_prime, P
 
@@ -153,10 +183,9 @@ class K2VAE(nn.Module):
         samples = []
         for _ in range(n_samples):
             Z_sample_T = dist_z.rsample()  # (B, m, d)
-
-            mu = self.decoder_mu(Z_sample_T).transpose(1, 2)      # (B, input_dim, m)
-            sigma = self.decoder_sigma(Z_sample_T).transpose(1, 2)
-            sigma = F.softplus(sigma) + 1e-6
+            Z_sample = Z_sample_T.transpose(1, 2)
+            mu = self._decode_mean(Z_sample)
+            sigma = self._decode_sigma(Z_sample)
 
             y_sample = Normal(mu, sigma).rsample()
             samples.append(y_sample)

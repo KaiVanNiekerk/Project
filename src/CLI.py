@@ -1,8 +1,7 @@
 from pathlib import Path
 from torch.utils.data import DataLoader
-from torch.utils.data.dataloader import default_collate
  
-from preprocessing import load_csv, split, scale, swDataset, k2vae_integration
+from preprocessing import load_csv, split, scale, swDataset
 from sklearn.preprocessing import StandardScaler
  
 """
@@ -22,19 +21,6 @@ Long-term (T fixed, L swept over four horizons):
     Electricity-L, Traffic-L,
     Exchange-L, Weather-L              : T = 96, L in {96, 192, 336, 720}
 """
-
-def _patched_collate(patch_size: int):
-    # swDataset yields raw (T, N) / (L, N) pairs. K2VAE.forward and elbo.py's
-    # loss functions both expect (B, input_dim, patches) for X_C AND X_H
-    # (input_dim = N * patch_size). k2vae_integration does patchify+flatten
-    # without projection, so it's applied identically to both windows here,
-    # at collate time, rather than inside swDataset itself.
-    def collate(batch):
-        X_C, X_H = default_collate(batch)          # (B, T, N), (B, L, N)
-        X_C = k2vae_integration(X_C, patch_size)   # (B, input_dim, n)
-        X_H = k2vae_integration(X_H, patch_size)   # (B, input_dim, m)
-        return X_C, X_H
-    return collate
 
 class CLI:
     def __init__(self, datasets_dir: str = "datasets"):
@@ -94,14 +80,14 @@ class CLI:
         train_df, val_df, test_df = split(df, train_frac, val_frac)
         train_arr, val_arr, test_arr, scaler = scale(train_df, val_df, test_df)
  
-        collate = _patched_collate(patch_size)
-        train_loader = DataLoader(swDataset(train_arr, T, L), batch_size=batch_size, shuffle=True, collate_fn=collate)
-        val_loader = DataLoader(swDataset(val_arr, T, L), batch_size=batch_size, shuffle=False, collate_fn=collate)
-        test_loader = DataLoader(swDataset(test_arr, T, L), batch_size=batch_size, shuffle=False, collate_fn=collate)
+        # Keep the temporal and variable dimensions intact for RevIN. Patching
+        # is applied inside K2VAE after instance statistics are calculated.
+        train_loader = DataLoader(swDataset(train_arr, T, L), batch_size=batch_size, shuffle=True)
+        val_loader = DataLoader(swDataset(val_arr, T, L), batch_size=batch_size, shuffle=False)
+        test_loader = DataLoader(swDataset(test_arr, T, L), batch_size=batch_size, shuffle=False)
  
-        # scaler is returned so callers can inverse-transform predictions
-        # back to the original data scale (needed by
-        # plot_data.PlotDataCollector for plot-ready outputs).
+        # Return the scaler so callers can inverse-transform predictions back to
+        # original units for metrics and PlotDataCollector outputs.
         return train_loader, val_loader, test_loader, n, m, scaler
         
 def smoke_test():
@@ -112,8 +98,8 @@ def smoke_test():
     train_loader, val_loader, test_loader, n, m, scaler = cli.load(csv_path, T=96, L=96, patch_size=16)
  
     X_C, X_H = next(iter(train_loader))
-    print(f"X_C (context, patched) shape: {X_C.shape}")   # (B, input_dim, n)
-    print(f"X_H (horizon, patched) shape: {X_H.shape}")    # (B, input_dim, m)
+    print(f"X_C (context, raw) shape: {X_C.shape}")   # (B, T, N)
+    print(f"X_H (horizon, raw) shape: {X_H.shape}")    # (B, L, N)
     print(f"batches, train: {len(train_loader)}, val: {len(val_loader)}, test: {len(test_loader)}")
  
  

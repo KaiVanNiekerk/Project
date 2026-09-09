@@ -126,31 +126,44 @@ class PlotDataCollector:
         num_features: int,
         patch_size: int,
         inverse_scale: bool = True,
+        patched: bool = True,
         sample_ids: Optional[List[int]] = None,
     ) -> ForecastBatch:
         """Build plot-ready ForecastBatch payload.
 
         Steps:
         1) tensor -> numpy
-        2) unpatch (B, input_dim, p) -> (B, time, N)
+          2) convert patched (B, input_dim, p) or raw (B, time, N)
+              tensors to (B, time, N)
         3) optional inverse scaling
            - points use inverse_transform
            - sigma uses scale_ only
         """
-        y_true = self.unpatch_to_time(self.to_numpy(x_h_true), num_features, patch_size)
-        y_mu = self.unpatch_to_time(self.to_numpy(x_h_mu), num_features, patch_size)
+        def to_time(tensor: torch.Tensor) -> np.ndarray:
+            """Convert one model payload to the canonical time-major shape."""
+            values = self.to_numpy(tensor)
+            if patched:
+                return self.unpatch_to_time(values, num_features, patch_size)
+            # RevIN-integrated K2VAE already returns temporal layout, so no
+            # inverse patch operation is appropriate in this branch.
+            if values.ndim != 3 or values.shape[2] != num_features:
+                raise ValueError(f"Expected raw shape (B, time, {num_features}), got {values.shape}")
+            return values
+
+        y_true = to_time(x_h_true)
+        y_mu = to_time(x_h_mu)
 
         y_sigma = None
         if x_h_sigma is not None:
-            y_sigma = self.unpatch_to_time(self.to_numpy(x_h_sigma), num_features, patch_size)
+            y_sigma = to_time(x_h_sigma)
 
         context_true = None
         if x_c_true is not None:
-            context_true = self.unpatch_to_time(self.to_numpy(x_c_true), num_features, patch_size)
+            context_true = to_time(x_c_true)
 
         context_mu = None
         if x_c_mu is not None:
-            context_mu = self.unpatch_to_time(self.to_numpy(x_c_mu), num_features, patch_size)
+            context_mu = to_time(x_c_mu)
 
         if inverse_scale:
             y_true = self.inverse_scale_points(y_true)

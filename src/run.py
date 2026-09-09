@@ -1,4 +1,4 @@
-# MADE BY CLAUDE TO SEE IF WORKS!!!
+import os
 import torch
 import yaml
 from pathlib import Path
@@ -12,7 +12,11 @@ from plotting import PlotManager
 
 
 def main():
-    DATASET_CONFIG_PATH = Path("configs/datasets_yaml/ETTm1-L.yaml")
+    # Environment overrides keep dataset and smoke-test selection outside the
+    # source file, making repeated experiments easier to launch.
+    DATASET_CONFIG_PATH = Path(
+        os.environ.get("DATASET_CONFIG", "configs/datasets_yaml/ETTh1-L.yaml")
+    )
     with DATASET_CONFIG_PATH.open("r", encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
 
@@ -30,7 +34,7 @@ def main():
     KL_WEIGHT = hp["kl_weight"]
     
     
-    MAX_EPOCHS = 100
+    MAX_EPOCHS = int(os.environ.get("MAX_EPOCHS", "100"))
     BATCH_SIZE = 32
     DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
     GENERATE_PLOTS = True  # flip off for quick smoke tests
@@ -42,8 +46,8 @@ def main():
     )
 
     X_C, _ = next(iter(train_loader))
-    input_dim = X_C.shape[1]
-    num_features = input_dim // patch_size
+    num_features = X_C.shape[2]
+    input_dim = num_features * patch_size
 
     # ---- model ----
     # Might need to change this if we do want to tune for optimal params here, will use integ from above
@@ -52,7 +56,7 @@ def main():
         d_ff=integ["d_ff"], n_layers=integ["n_layers"],
         n=n, m=m, dropout=integ["dropout"] # adjust this dropout value to be higher 
     )
-    model = K2VAE(input_dim=input_dim, d=D, m=m, n=n, integrator_args=integrator_args, hidden_dim=HIDDEN_DIM, hidden_layers=HIDDEN_LAYERS)
+    model = K2VAE(input_dim=input_dim, d=D, m=m, n=n, integrator_args=integrator_args, num_vars=num_features, patch_size=patch_size, hidden_dim=HIDDEN_DIM, hidden_layers=HIDDEN_LAYERS)
     optimizer = torch.optim.Adam(model.parameters(), lr=LR, weight_decay=1e-4)
 
     # ---- train ----
@@ -77,7 +81,15 @@ def main():
     print(f"test losses: {test_result['losses']}")
     print(f"test batches: {test_result['n_batches']} (skipped {test_result['n_skipped']})")
     
-    test_nmae = nmae(test_result["X_H"], test_result["mu"])
+    # Report NMAE in the original dataset units, matching the paper metric.
+    y_test = test_result["X_H"].numpy()
+    mu_test = test_result["mu"].numpy()
+    num_values = y_test.shape[-1]
+    y_test_original = scaler.inverse_transform(y_test.reshape(-1, num_values))
+    mu_test_original = scaler.inverse_transform(mu_test.reshape(-1, num_values))
+    test_nmae = nmae(
+        torch.from_numpy(y_test_original), torch.from_numpy(mu_test_original)
+    )
     print(f"test NMAE: {test_nmae.item():.4f}")
     print(f"test CRPS: {test_result['losses']['crps']:.4f}")
     
@@ -102,6 +114,7 @@ def main():
             num_features=num_features,
             patch_size=patch_size,
             inverse_scale=True,
+            patched=False,
         )
 
         # Grab up to the first 6 features safely (prevents crashing if a dataset has fewer than 6)

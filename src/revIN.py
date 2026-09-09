@@ -10,17 +10,20 @@ class RevIN(nn.Module):
     shifts/drift in long-term forecasting.
     """
 
-    def __init__(self, num_vars: int, eps: float = 1e-5, affine: bool = True):
+    def __init__(self, num_vars: int, eps: float = 1e-5, affine: bool = True, affine_min_scale: float = 0.1):
         """
         Args:
             num_vars (int): Number of variables in the input time series.
             eps (float): A small value added to the variance for numerical stability.
             affine (bool): If True, applies learnable affine parameters after normalization.
+            affine_min_scale (float): Minimum magnitude allowed for a learned affine
+                scale during normalization and denormalization. Defaults to 0.1.
         """
         super().__init__()
         self.num_vars = num_vars
         self.eps = eps
         self.affine = affine 
+        self.affine_min_scale = affine_min_scale
 
         # Allows the model to learn scaling and shifting parameters instead of just 
         # normalizing to zero mean and unit variance which may not be optimal for all datasets
@@ -73,7 +76,7 @@ class RevIN(nn.Module):
 
         if self.affine:
             # Apply learnable affine transformation
-            x = x * self.weight + self.bias  # Shape: (Batch, Time, Variables)
+            x = x * self._safe_weight() + self.bias  # Shape: (Batch, Time, Variables)
 
         return x
 
@@ -85,13 +88,29 @@ class RevIN(nn.Module):
             x (torch.Tensor): The normalized time series data. Expected shape: (Batch, Time, Variables).
         """
         if self.affine:
-            # Reverse the affine transformation , self.eps * self.eps is added to avoid division by zero
-            x = (x - self.bias) / (self.weight + self.eps * self.eps)  # Shape: (Batch, Time, Variables)
+            # Reverse the affine transformation without allowing a learned scale
+            # near zero to make denormalized outputs numerically unbounded.
+            x = (x - self.bias) / self._safe_weight()  # Shape: (Batch, Time, Variables)
 
         # Restore original scale
         x = x * self.std + self.mean  # Shape: (Batch, Time, Variables)
 
         return x
+
+    def denormalize_sigma(self, sigma: torch.Tensor) -> torch.Tensor:
+        """Map positive standard deviations back to the input scale.
+
+        Standard deviations use the absolute affine scale and never the affine
+        bias because spread has no location component.
+        """
+        if self.affine:
+            sigma = sigma / self._safe_weight().abs()
+        return sigma * self.std
+
+    def _safe_weight(self) -> torch.Tensor:
+        """Keep the learned affine scale away from the singular zero point."""
+        safe_abs_weight = self.weight.abs().clamp_min(self.affine_min_scale)
+        return torch.where(self.weight >= 0, safe_abs_weight, -safe_abs_weight)
 
 
 

@@ -74,6 +74,20 @@ class Trainer:
             train_rec=[], val_rec=[],
             skipped_batches=[],
         )   
+
+    def _reconstruction_scale(self, X_C: torch.Tensor) -> torch.Tensor:
+        """Return the RevIN scale used to stabilize reconstruction MSE.
+
+        Models used for no-RevIN ablations receive unit scale so this helper
+        preserves the trainer's loss contract without requiring RevIN.
+        """
+        revin = getattr(self.model, "revin", None)
+        std = getattr(revin, "std", None)
+        if std is None:
+            return torch.ones(
+                X_C.shape[0], 1, X_C.shape[2], device=X_C.device, dtype=X_C.dtype
+            )
+        return std
              
         # Actual training loop
     def fit(self, maxEpochs: int):
@@ -144,6 +158,12 @@ class Trainer:
             # sees this, it just crashes the run.
             try:
                 X_Rec, mu, sigma, Z_prime, P = self.model(X_C)
+                std = self._reconstruction_scale(X_C)
+                # The model returns RevIN-denormalized reconstructions, while
+                # NLL remains in output space. Normalize only the MSE inputs so
+                # large per-variable scales do not dominate its gradients.
+                X_C_scaled = X_C / std
+                X_Rec_scaled = X_Rec / std
  
                 losses = total_loss(
                     X_H=X_H,
@@ -151,8 +171,8 @@ class Trainer:
                     sigma=sigma,
                     Z_prime=Z_prime,
                     P=P,
-                    X_C=X_C,
-                    X_Rec=X_Rec,
+                    X_C=X_C_scaled,
+                    X_Rec=X_Rec_scaled,
                     lambda_rec=self.lambda_rec,
                     beta=self.kl_weight,
                 )
@@ -199,6 +219,11 @@ class Trainer:
  
             try:
                 X_Rec, mu, sigma, Z_prime, P = self.model(X_C)
+                std = self._reconstruction_scale(X_C)
+                # Use the same reconstruction scale during validation as during
+                # training so the checkpoint criterion has the same objective.
+                X_C_scaled = X_C / std
+                X_Rec_scaled = X_Rec / std
 
                 #can be removed later 
                 if n_batches == 0: # Just print for the first batch to avoid spam
@@ -210,8 +235,8 @@ class Trainer:
                     sigma=sigma,
                     Z_prime=Z_prime,
                     P=P,
-                    X_C=X_C,
-                    X_Rec=X_Rec,
+                    X_C=X_C_scaled,
+                    X_Rec=X_Rec_scaled,
                     lambda_rec=self.lambda_rec,
                     beta=self.kl_weight, # Check to see if should be in val
                 )
@@ -302,6 +327,11 @@ class Trainer:
 
             try:
                 X_Rec, mu, sigma, Z_prime, P = self.model(X_C)
+                std = self._reconstruction_scale(X_C)
+                # Keep reported test loss consistent with the training and
+                # validation reconstruction objective.
+                X_C_scaled = X_C / std
+                X_Rec_scaled = X_Rec / std
 
                 losses = total_loss(
                     X_H=X_H,
@@ -309,8 +339,8 @@ class Trainer:
                     sigma=sigma,
                     Z_prime=Z_prime,
                     P=P,
-                    X_C=X_C,
-                    X_Rec=X_Rec,
+                    X_C=X_C_scaled,
+                    X_Rec=X_Rec_scaled,
                     lambda_rec=self.lambda_rec,
                     beta=self.kl_weight, # Check if should be in test
                 )
