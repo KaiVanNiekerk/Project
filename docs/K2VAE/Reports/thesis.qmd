@@ -311,3 +311,75 @@ U = \mathrm{Integrator}(X^{Res}) = [u_1, u_2, \dots, u_m], \qquad U \in \mathbb{
 $$ {#eq-k2vae-integrator}
 
  This vector $U$ is used to correct the predicted latent state, allowing the model to account for nonlinearities and improve the accuracy of long-horizon forecasts.
+
+ ### Reversible Instance Normalization (RevIN)
+
+Real-world multivariate time-series data frequently display non-stationarity, where statistical properties such as the local mean and variance shift over time. While global standardization maps features to an overall zero mean and unit variance, it fails to mitigate localized distribution shifts across sliding windows. In long-horizon probabilistic forecasting, this unaddressed shift leads to prediction drift. A secondary issue in multivariate forecasting is scale entanglement. Multivariate datasets often combine variables that measure different physical quantities with vastly different numerical magnitudes. When these disparate quantities are modeled jointly, the numerical disparity complicates both latent dynamic modeling and probabilistic uncertainty estimation. If a single variance parameter attempts to model the uncertainty across all variables simultaneously, it is forced into a mathematical compromise that fails to capture the true variance of either the large or small scale variables. To address localized drift and decouple variable scales, Reversible Instance Normalization (RevIN), originally proposed by Kim et al., is integrated directly into the forecasting architecture.
+
+Following the methodology of Kim et al., for a given context window $X \in \mathbb{R}^{T \times N}$, instance statistics are calculated independently for each variable $j \in \{1, \dots, N\}$ across the temporal dimension $T$. The instance mean $\mu_j$ and standard deviation $\sigma_j$ are defined as follows:
+
+$$
+\mu_j = \frac{1}{T} \sum_{t=1}^T X_{t, j}, \qquad \sigma_j = \sqrt{\frac{1}{T} \sum_{t=1}^T (X_{t, j} - \mu_j)^2 + \epsilon}
+$$ {#eq-revin-stats}
+
+where $\epsilon > 0$ is a small constant ensuring numerical stability. Using these statistics, the context window is normalized to a zero mean and unit variance base, and then immediately scaled and shifted:
+
+$$
+\tilde{X}_{t, j} = \gamma_j \left( \frac{X_{t, j} - \mu_j}{\sigma_j} \right) + \beta_j
+$$ {#eq-revin-norm}
+
+The variables $\gamma_j$ and $\beta_j$ are learnable affine parameters initialized to $1$ and $0$ respectively. Normalizing every input window to a mean of zero and a variance of one strips away information about the sequence's original baseline and amplitude. In some forecasting tasks, knowing whether the original values were exceptionally high or low is useful for predicting the next steps. The affine parameters give the model the flexibility to scale and shift the normalized data into an optimal representation space. This allows the network to reverse parts of the normalization if the original magnitude contains useful predictive signals, rather than being rigidly constrained to a mean of zero and variance of one.
+
+Once the model predicts future states in the normalized space $\tilde{Y}$, the predictions are mapped back to their original physical units via the inverse transformation:
+
+$$
+\hat{Y}_{t, j} = \left( \frac{\tilde{Y}_{t, j} - \beta_j}{\gamma_j + \epsilon^2} \right) \sigma_j + \mu_j
+$$ {#eq-revin-denorm}
+
+Integrating this mechanism into the K$^2$VAE framework required structural deviations from standard patched time-series pipelines to prevent model collapse and data leakage. Standard implementations apply patchification during data loading, which flattens the continuous temporal dimension $T$ required to compute accurate instance statistics. In this implementation, patching is removed from the data loading pipeline. The model receives raw temporal tensors, normalizes them via the RevIN module, and only applies patchification afterward. Furthermore, RevIN is embedded directly as a learnable module within the model to ensure its affine parameters receive gradient updates during backpropagation. To prevent leaking future distribution data into the model, instance statistics are computed strictly on the observed context window $X$. The future horizon $Y$ is never normalized using its own statistics. All horizon predictions rely entirely on the context statistics $\mu_X$ and $\sigma_X$.
+
+An adaptation of the RevIN methodology was required to stabilize the probabilistic modeling. In standard configurations, the decoder variance head operates in raw data space. Under mixed-scale datasets, the universal variance collapses toward the dominant numerical scale, resulting in excessively small standard deviations for smaller-scale variables and causing the Gaussian Negative Log-Likelihood to explode during evaluation. To resolve this, instance-rescaled variance decoding is implemented. The predicted variance is explicitly scaled back by the instance standard deviation $\sigma_X$ before applying the numerical floor. This links each variable's uncertainty to its native physical magnitude, bounding the negative log-likelihood throughout training.
+
+Finally, because the model denormalizes its mean predictions back to original units, computing Mean Squared Error reconstruction loss directly on raw values introduces disproportionate gradient spikes for high-magnitude features. To maintain gradient stability, the context reconstruction is scaled down by the detached instance standard deviation $\sigma_X$ prior to evaluating the reconstruction loss term. The probabilistic horizon predictions are concurrently evaluated by the variance-linked Gaussian Negative Log-Likelihood in raw physical space.
+
+### The Koopman Network
+
+Standard deep learning forecasting models, such as recurrent networks or other state-of-the-art models like diffusion and flow-based models, predict the future iteratively. To predict step $t+2$, the model must first predict step $t+1$ and then feed that prediction back into its own nonlinear layers. This creates an autoregressive feedback loop where small approximation errors early in the sequence distort the input for future steps, causing errors to compound exponentially over long horizons. The Koopman network within the K$^2$VAE architecture bypasses this feedback loop entirely. By leveraging Koopman theory, the model maps the complex nonlinear time-series data into a higher-dimensional latent measurement space where the temporal dynamics progress approximately linearly. Because the transitions are linear, stepping forward in time does not require passing data back through nonlinear neural network layers; it simply requires matrix multiplication.
+
+The model first applies a parameterized measurement function $\psi$ to the embedded context patches $X_p'$. In this implementation, the measurement function is constructed as a multi-layer perceptron featuring dropout for regularization. As defined in @eq-koopman-measurement, this network maps the data into the latent measurement space, producing the observable states $X_p^*$. Once mapped, the objective is to find a linear Koopman operator $\mathcal{K}$ that pushes these states forward in time such that $x_{t+1}^* \approx \mathcal{K} x_t^*$.
+
+To capture the specific transient dynamics of the current input window, a local operator $\mathcal{K}_{loc}$ is computed dynamically for each batch using extended Dynamic Mode Decomposition. The sequence $X_p^*$ is partitioned into two overlapping matrices: $X_{back}$ containing all tokens except the last, and $X_{fore}$ containing all tokens except the first. While @eq-koopman-local outlines the standard Moore-Penrose pseudoinverse solution, directly solving this on short context windows frequently results in an underdetermined system because there are fewer transitions than operator parameters. To guarantee numerical stability, the implementation avoids the direct pseudoinverse and instead solves a regularized least-squares problem incorporating a Ridge penalty $\lambda$:
+
+$$
+\mathcal{K}_{loc} = \arg\min_K \| K X_{back} - X_{fore} \|_F^2 + \lambda \|K\|_F^2
+$$ {#eq-koopman-ridge}
+
+This regularization ensures the local operator remains bounded. Relying solely on the local context window remains mathematically unstable across diverse batches. The model introduces $\mathcal{K}_{glo}$, a globally learnable matrix shared across all sequences. To prevent early-training gradient explosions, $\mathcal{K}_{glo}$ is initialized as an orthogonal matrix via Singular Value Decomposition. The final transition operator is the sum of both components, as previously defined in @eq-koopman-combined.
+
+To ensure long-term mathematical stability during repeated rollouts, the spectral norm of the combined operator $\mathcal{K}$ is continuously evaluated and clamped such that $\|\mathcal{K}\|_2 \le 1$. Furthermore, if the local least-squares solver encounters undefined values due to degenerate batches, the network gracefully falls back to an identity matrix to prevent error propagation. With the transition matrix established, the model reconstructs the past context $\hat{X}_C$ and forecasts the future horizon $\hat{X}_H$. The forecasting phase isolates the final state of the context window, $z_0 = x_{n}^*$, and projects it forward. In theory, the entire trajectory can be solved simultaneously via matrix exponentiation. However, in this implementation, the future states are generated by sequentially applying the fixed Koopman operator in a loop, computing each step as $z_t = \mathcal{K} z_{t-1}$. While computed iteratively in the code, every future time-step relies exclusively on the repeated application of the same linear matrix rather than feeding predictions back through a nonlinear neural network. This breaks the autoregressive error compounding loop, securing stability over extended forecasting horizons.
+
+### The Integrator
+
+Because the Koopman operator provides a purely linear approximation of the system dynamics, it inherently fails to capture complex nonlinear behaviors. The discrepancies between the true nonlinear dynamics and the linear approximation are isolated by computing the residual error over the context window. As defined in @eq-k2vae-residual, this residual $X^{Res}$ is the mathematical difference between the true mapped latent states and the Koopman network's linear reconstruction of those same states. In time-series forecasting, these residuals are not random noise. They contain structural, sequential patterns that the linear matrix could not model. The K$^2$VAE architecture utilizes a dedicated neural network module, termed the Integrator, to process these leftover nonlinear dynamics and translate them into a future correction sequence.
+
+Given that the residual errors possess sequential dependencies across time, the Integrator is implemented as an encoder-only Transformer rather than a standard feedforward neural network. A standard neural network processes inputs independently and struggles to map long-range connections. In contrast, the Transformer uses a self-attention mechanism that allows the model to dynamically weigh the relationship between all time steps simultaneously. This enables the Integrator to recognize how a nonlinear deviation at the beginning of the context window might influence an error much later in the sequence. The module processes the context residuals as a sequence of patches and outputs a corresponding sequence of control inputs $U$ that spans the prediction horizon, as shown in @eq-k2vae-integrator. 
+
+In the codebase implementation, this transformation occurs in three sequential stages. The input residual tensor is first passed through a linear adaptation layer, projecting it from the Koopman measurement dimension into the specific working dimension required by the Transformer architecture. The adapted tensor is then passed through a stack of Transformer encoder layers, which execute the multi-head self-attention to evaluate the temporal dependencies across the entire context window. Finally, the encoded sequence is flattened and passed through a linear projection head. This maps the representation to the target horizon length, reshaping it into the final control sequence $U$. This sequence represents the projected nonlinear dynamics and is subsequently passed to the Kalman network to correct the final probabilistic forecast.
+
+### The K$^2$VAE Pipeline
+
+The K$^2$VAE class is the central module that connects the individual architectural components into a complete, trainable probabilistic model. It takes the linear future prediction from the Koopman network and the nonlinear control sequence from the Integrator, passing both to the Kalman network. The Kalman network then merges these inputs to produce a refined future latent mean $Z'$ and a covariance matrix $P$ representing process uncertainty. 
+
+To fulfill the variational autoencoder objective, the model maps these deterministic parameters into a continuous probability distribution. The model defines a multivariate normal distribution $\mathcal{N}(Z', P)$ and uses the reparameterization trick to draw a stochastic latent state $Z_{sample}$. During this step, a minor jitter matrix is added to the diagonal of the covariance matrix. This ensures the matrix remains strictly positive-definite, which is a mathematical requirement indicating that variance is positive across all dimensions. Without this addition, the computational sampling algorithm could encounter numerical errors and crash.
+
+In the original theoretical framework, the decoding step is typically described simply as an inverse measurement function that maps the latent state back to the observation space. However, to generate a full probabilistic forecast in practice, the implementation requires more than a single projection. The sampled latent state must be passed through two separate multi-layer perceptrons to predict the parameters of the final Gaussian forecast:
+
+$$
+\hat{Y}_{\mu} = \text{Decoder}_\mu(Z_{sample})
+$$ {#eq-k2vae-decoder-mu}
+
+$$
+\hat{Y}_{\sigma} = \text{softplus}(\text{Decoder}_\sigma(Z_{sample})) + \sigma_{\text{floor}}
+$$ {#eq-k2vae-decoder-sigma}
+
+A specific numerical adjustment is required during this standard deviation decoding phase. As shown in @eq-k2vae-decoder-sigma, the model applies a softplus activation to ensure the standard deviation remains strictly positive, followed immediately by the addition of a defined minimum value, the sigma floor ($\sigma_{\text{floor}}$). Preventing the standard deviation from approaching zero is necessary because a near-zero variance causes the Gaussian negative log-likelihood loss function to approach infinity, leading to optimization failures during training. Once decoded, these outputs are denormalized by the RevIN module to produce the final probabilistic predictions in their original physical scale.
