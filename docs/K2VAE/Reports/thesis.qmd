@@ -95,9 +95,11 @@ KalmanNet is the part that makes this filtering stage adaptive: it learns how to
 
 Patching then makes the whole pipeline tractable by shortening the input sequence into local chunks before embedding, which reduces sequence length while preserving local structure [@k2vae2025]. In combination, the patching, Koopman-style evolution, KalmanNet refinement, and VAE objective are what make K2VAE a distinct forecasting model rather than just another VAE for time series.
 
+Should we add somthing on transformers here?
+
 ### Chapter Outline
 
-The remainder of this thesis is structured to progressively develop a theoretical understanding of, implement, and evaluate the proposed architecture. Chapter 2 establishes the core mathematical foundations, detailing Koopman theory, Variational Autoencoders, the use of an Integrator for capturing nonlinear residuals and the Kalman-based state estimation. Building upon these principles, Chapter 3 details the methodology and practical implementation of the K$^2$VAE framework, illustrating how these individual components are integrated into a cohesive pipeline alongside data preprocessing and training objectives. Chapter 4 presents the experimental setup and evaluates the model against baseline approaches, offering both quantitative performance metrics and qualitative analyses of its point estimates and probabilistic confidence intervals through visualisations. Finally, Chapter 5 summarizes the core findings, evaluates the fulfillment of the research objectives, and outlines current limitations alongside potential avenues for future work.
+The remainder of this thesis is structured to progressively develop a theoretical understanding of, implement, and evaluate the proposed architecture. Chapter 2 establishes the core mathematical foundations, detailing Koopman theory, Variational Autoencoders, the idea behind transformers and the Kalman-based state estimation. Building upon these principles, Chapter 3 details the methodology and practical implementation of the K$^2$VAE framework, illustrating how these individual components are integrated into a cohesive pipeline alongside data preprocessing and training objectives. Chapter 4 presents the experimental setup and evaluates the model against baseline approaches, offering both quantitative performance metrics and qualitative analyses of its point estimates and probabilistic confidence intervals through visualisations. Finally, Chapter 5 summarizes the core findings, evaluates the fulfillment of the research objectives, and outlines current limitations alongside potential avenues for future work.
 
 ## Prelinaries
 
@@ -109,21 +111,21 @@ $$
 x_{k+1} = f(x_k)
 $$
 
-The issue arises as our prediction horizon grows, resulting in compounding error and drift. Koopman theory provides a way to linearise the dynamics by mapping the finite-dimensional nonlinear state space into a higher infinite-dimensional space where the evolution is linear, which is characterised via a measurement function. This is achieved through the Koopman operator, which acts on observable functions of the state rather than the state itself:
+The issue arises as our prediction horizon grows, resulting in compounding error and drift. Koopman theory provides a way to linearise the dynamics by mapping the finite-dimensional nonlinear state space into a higher infinite-dimensional space where the evolution is linear, which is characterised via a measurement function. This is achieved through the Koopman operator, which acts on observable functions of the state rather than the state itself [@koopman2021modern]:
 
 $$
 \psi(x_{k+1}) = \psi(f(x_k)) = \mathcal{K} \circ \psi(x_k)
-$$
+$$ {#eq-koopman-operator}
 
 The advantage of the Koopman operator is that it allows us to model the system's evolution linearly in our transformed space, even if our original system is nonlinear. As a result, we can use linear techniques to predict more stable and accurate forecasts over longer horizons. 
 
-A key challenge when applying Koopman theory is that the true Koopman operator is infinite-dimensional, necessitating a finite-dimensional approximation. Measurement functions act as observables that extract specific properties from the system's state. Manually defining a finite set of these functions to perfectly linearise complex dynamics is notoriously difficult. Therefore, rather than relying on fixed basis functions, we use a parameterised neural network to jointly learn the optimal measurement function $\psi$ and the Koopman operator $\mathcal{K}$ directly from the data. This allows the model to learn the optimal transformation and apply it to the raw patches, mapping them into a latent measurement space. By linearising the latent dynamics, we establish a structured, predictable environment that makes subsequent state estimation and uncertainty modeling mathematically tractable:
+A key challenge when applying Koopman theory is that the true Koopman operator is infinite-dimensional, necessitating a finite-dimensional approximation. Measurement functions act as observables that extract specific properties from the system's state. Manually defining a finite set of these functions to perfectly linearise complex dynamics is notoriously difficult. Therefore, rather than relying on fixed basis functions, we use a parameterised neural network to jointly learn the optimal measurement function $\psi$ and the Koopman operator $\mathcal{K}$ directly from the data [@koopman2021modern]. This allows the model to learn the optimal transformation and apply it to the raw patches, mapping them into a latent measurement space. By linearising the latent dynamics, we establish a structured, predictable environment that makes subsequent state estimation and uncertainty modeling mathematically tractable:
 
 $$
 X^{P*} = \psi(X^{P'})
-$$
+$$ {#eq-koopman-measurement}
 
-To apply our linear transition rule during training, we utilize extended Dynamic Mode Decomposition (eDMD) to learn the Koopman operator $\mathcal{K}$ from the transformed latent states. Given our projected latent states or tokens $X^{P*}$ as well as a sequence of mapped temporal data, we separate the sequence into two matrices. These matrices represent the past and the future (shifted by one time step) and are used to learn the linear transition rule in the latent space. The past matrix $X_{back}^{P*}$ contains all but the last token, while the future matrix $X_{fore}^{P*}$ contains all but the first token:
+To apply our linear transition rule during training, we utilize extended Dynamic Mode Decomposition (eDMD) to learn the Koopman operator $\mathcal{K}$ from the transformed latent states [@koopman2021modern]. Given our projected latent states or tokens $X^{P*}$ as well as a sequence of mapped temporal data, we separate the sequence into two matrices. These matrices represent the past and the future (shifted by one time step) and are used to learn the linear transition rule in the latent space. The past matrix $X_{back}^{P*}$ contains all but the last token, while the future matrix $X_{fore}^{P*}$ contains all but the first token:
 
 $$
 X_{back}^{P*} = [x_1^{P*}, x_2^{P*}, \dots, x_{n-1}^{P*}]
@@ -137,30 +139,30 @@ From this, we can extract the local Koopman operator $\mathcal{K}_{loc}$ that be
 
 $$
 \mathcal{K}_{loc} = X_{fore}^{P*} (X_{back}^{P*})^\dagger
-$$
+$$ {#eq-koopman-local}
 
-This local Koopman operator $\mathcal{K}_{loc}$ is used to capture the local transition rule in the current measurement space; however, relying solely on this can result in numerical instability and incorrect convergence. To address this, we introduce a global Koopman operator $\mathcal{K}_{glo}$ that is learned across all training sequences. To ensure mathematical stability and prevent values from exploding early in training, this global matrix is initialized as an orthogonal matrix using Singular Value Decomposition (SVD). This global operator captures the overall dynamics of the system and provides a stabilizing influence on the local operator. The final transition rule is then a combination of both local and global operators, allowing for more robust and accurate long-horizon forecasting:
+This local Koopman operator $\mathcal{K}_{loc}$ is used to capture the local transition rule in the current measurement space; however, relying solely on this can result in numerical instability and incorrect convergence. To address this, we introduce a global Koopman operator $\mathcal{K}_{glo}$ that is learned across all training sequences. To ensure mathematical stability and prevent values from exploding early in training, this global matrix is initialized as an orthogonal matrix using Singular Value Decomposition (SVD). This global operator captures the overall dynamics of the system and provides a stabilizing influence on the local operator. The final transition rule is then a combination of both local and global operators, allowing for more robust and accurate long-horizon forecasting [@k2vae2025]:
 
 $$
 \mathcal{K} = \mathcal{K}_{loc} + \mathcal{K}_{glo}
-$$
+$$ {#eq-koopman-combined}
 
 Consequently, while the Koopman operator $\mathcal{K}$ allows us to forecast longer horizons with greater stability and accuracy without the compounding error that arises from nonlinear dynamics, there exists an inherent bias that is displayed from our residual error between the predicted and actual future states. To address this, additional components of our K$^2$VAE model are introduced, including an integrator to process nonlinear residuals and a KalmanNet-style refinement mechanism to improve the latent state estimate and model process uncertainty.
 
 ### Kalman Filter
 
-The Kalman filter is a recursive algorithm that estimates the state of a dynamic system from noisy observations. It assumes the underlying process it is modeling is a linear state space model that alternates between a process model and an observation model. 
+The Kalman filter is a recursive algorithm that estimates the state of a dynamic system from noisy observations. It assumes the underlying process it is modeling is a linear state space model that alternates between a process model and an observation model [@kalman1960new].
 
 The process model describes how the system (hidden state) evolves over discrete time steps.
 $$
 x_k = A x_{k-1} + B u_k + w_k, \qquad w_k \sim \mathcal{N}(0, Q)
-$$
+$$ {#eq-kf-process}
 $x_k$ is the state vector at time step $k$, $A$ is the state transition matrix (The underlying dynamics of a system), $B$ is the control input matrix (The effect of control inputs on the system), $u_k$ is the control input (The external input to the system), and $w_k$ is the process noise, which is assumed to be Gaussian with zero mean and covariance $Q$.
 
 The observation model relates this hidden state to the noisy observations actually observed.
 $$
 o_k = H x_k + v_k, \qquad v_k \sim \mathcal{N}(0, R)
-$$
+$$ {#eq-kf-observation}
 $o_k$ is the observation vector at time step $k$, $H$ is the observation matrix (The relationship between the hidden state and the observed measurements, helps map state space into observation space), and $v_k$ is the observation noise, which is also assumed to be Gaussian with zero mean and covariance $R$. 
 
 Making use of these two models at each time step, the Kalman filter executes a prediction step (using the process model) and an update step (using the observation model) to refine its estimate of the hidden state.
@@ -169,100 +171,88 @@ The prediction step uses the process model to predict the next state and its unc
 
 $$
 \hat{x}_k = A x_{k-1} + B u_k
-$$
+$$ {#eq-kf-predict-state}
 
 $$
 \hat{P}_k = A P_{k-1} A^\top + Q
-$$
+$$ {#eq-kf-predict-cov}
 
 $\hat{x}_k$  is the state estimate and $\hat{P}_k$ is the uncertainty (covariance) of the state estimate.
 
 We then use the observation model to correct our state estimate based on the new observation $o_k$ and how much we trust prediction against how much we trust the observation. This is called the Kalman gain $K_k$. Which is computed as follows:
 $$
 K_k = \hat{P}_k H^\top \left( H \hat{P}_k H^\top + R \right)^{-1}
-$$
+$$ {#eq-kf-gain}
 
 The Kalman gain is the ratio of the uncertainty between the prediction step $\hat{P}_k$ and the observation noise $R$. The $H$ is used to map the state space into observation space so the covariance matricies can be compared. The Kalman gain is then used to update the state estimate and its uncertainty, taking us from our predicted ($\hat{x}_k$) state to our corrected ($x_k$) state estimate:
 $$
 x_k = \hat{x}_k + K_k \left( o_k - H \hat{x}_k \right)
-$$
+$$ {#eq-kf-update-state}
 
 $$
 P_k = \left(I - K_k H\right) \hat{P}_k
-$$
+$$ {#eq-kf-update-cov}
 
  The term. $o_k - H \hat{x}_k$ is the innovation (the residual). This is the discrepancy between the actual observation and the predicted observation. When this difference is large our predicted state and our observation are not in agreement. If this difference is small then our predicted state and our observation are in agreement. A $K_k$ close to 1 indicates that we trust our observation more as our prediction is uncertain thus upweight the innovation's importance, while a $K_k$ close to 0 indicates that we trust our prediction more as our observation is noisy and downweight our innovation's importance. After this we then update our uncertainty $P_k$ purely based on the observation matrix and the kalman gain to reflect the new information gained from the observation.
 
 -- JUST A NOTE TO PUT THE Joseph-stabilized covariance update in K2VAE model section --
 
-The extension to the kalman filter to handle non linear systems is through the koopman operator and koopman theory. We also make use of KalmanNet, a neural network-based extension of the Kalman filter that learns the desired matricies $A$, $B$, $H$, $Q$, and $R$ from data, allowing it to adapt to complex and nonlinear dynamics. This is particularly useful in our context, where the underlying system may not adhere to the strict linear assumptions of the traditional Kalman filter.
+The extension to the kalman filter to handle non linear systems is through the koopman operator and koopman theory. We also make use of KalmanNet, a neural network-based extension of the Kalman filter that learns the desired matricies $A$, $B$, $H$, $Q$, and $R$ from data, allowing it to adapt to complex and nonlinear dynamics [@kalmannet2021]. This is particularly useful in our context, where the underlying system may not adhere to the strict linear assumptions of the traditional Kalman filter.
 
 ### Transformer (Encoder Based Vanilla)
 
-A transformer is a deep learning architecture that has revolutionized the field of natural language processing and has also been applied to time-series forecasting. It is based on the self-attention mechanism, which allows the model to weigh the importance of different parts of the input sequence when making predictions. This is particularly useful for time-series data, where the relationships between different time steps can be complex and non-linear. 
+A transformer is a deep learning architecture that has revolutionized the field of natural language processing [@vaswani2017attention] and has also been applied to time-series forecasting [@nie2023patchtst]. It is based on the self-attention mechanism, which allows the model to weigh the importance of different parts of the input sequence when making predictions. This is particularly useful for time-series data, where the relationships between different time steps can be complex and non-linear. 
 
-Given a sequence of n input token embeddings $X \in \mathbb{R}^{n \times d}$, the transformer computes three matrices through linear transformations: the query $Q$, the key $K$, and the value $V$:
+Given a sequence of n input token embeddings $X \in \mathbb{R}^{n \times d}$, the transformer computes three matrices through linear transformations: the query $Q$, the key $K$, and the value $V$ [@vaswani2017attention]:
 $$
 Q = XW^Q, \quad K = XW^K, \quad V = XW^V
-$$
+$$ {#eq-transformer-qkv}
 
 $X$ is the input sequence of token embeddings, and $W^Q$, $W^K$, and $W^V$ are learnable weight matrices. Each token calculates a weighted average of the values $V$ based on the similarity between its query $Q$ and the keys $K$ of all other tokens. This is done using the scaled dot-product attention mechanism and allows the model to relate tokens to each other regardless of their position in the sequence. The attention scores for each token are computed as follows:
 $$
 \text{Attention}(Q, K, V) = \text{softmax}\left(\frac{QK^\top}{\sqrt{d_k}}\right)V
-$$
+$$ {#eq-transformer-attention}
 
-Transformers make use of multi-head attention, which allows the model to jointly evaluate information from different representation subspaces. Each head computes its own attention scores and outputs, which are then concatenated and linearly transformed to produce the final output. This enables the model to capture various aspects of the input sequence simultaneously. This is done via the following equation:
+Transformers make use of multi-head attention, which allows the model to jointly evaluate information from different representation subspaces. Each head computes its own attention scores and outputs, which are then concatenated and linearly transformed to produce the final output. This enables the model to capture various aspects of the input sequence simultaneously. This is done via the following equation [@vaswani2017attention]:
 $$
 \text{MultiHead}(Q, K, V) = \text{Concat}(\text{head}_1, \ldots, \text{head}_h)W^O
-$$
+$$ {#eq-transformer-multihead}
 $W^O$ is a learnable weight matrix that projects the concatenated outputs of all heads back into the original embedding space. 
 
-We then use a position wise feedforward neural network to further process the output of the multi-head attention mechanism. This feedforward network consists of two linear transformations with a ReLU activation in between, applied independently to each position in the sequence:
+We then use a position wise feedforward neural network to further process the output of the multi-head attention mechanism. This feedforward network consists of two linear transformations with a ReLU activation in between, applied independently to each position in the sequence [@vaswani2017attention]:
 
 $$
 \mathrm{FFN}(x) = \underbrace{\max(0,\, xW_1 + b_1)}_{\text{ReLU}}\,W_2 + b_2
-$$
+$$ {#eq-transformer-ffn}
 $W_1$ and $W_2$ are learnable weight matrices, and $b_1$ and $b_2$ are learnable bias vectors. The feedforward network allows the model to capture complex relationships and interactions within a single token embedding (whereas attention captures dependencies between token embeddings).
 
 Both the multihead attention and the feedforward network are wrapped in residual connections and layer normalization, which help stabilize training and improve convergence.
 
-Since attention treats the sequence as an unordered set, order information is injected separately, typically via a fixed positional encoding added to the input embeddings before the first layer. Stacking $N$ such layers, with no causal masking and no decoder cross-attention, gives the encoder-only variant used here: a bidirectional token mixer mapping $\mathbb{R}^{n\times d} \to \mathbb{R}^{n\times d}$ that captures both local and global dependencies across the input sequence of token embeddings.
-
-### Integrator -- Dont know what to write here as this seems much more like a model specific thing than a preliminary. Is this breif enough or for a preliminary or hsould just be briefly mentioned at end of transformer?
-
-An integrator is used to capture the nonlinear residuals that arise from the linear approximation of the Koopman operator. The integrator takes in $X^{Res}$, the result of:
-$$ 
-X^{Res} = X^{P^{*}} - \hat{X^{C}}
-$$
-Where $X^{P^{*}}$ is the projected latent state and $\hat{X^{C}}$ is the reconstructed latent state from the Koopman operator. The integrator processes this residual using an encoder-only transformer which is described in the preliminary above. The integrator outputs a sequence of control inputs $U$ that span the prediction horizon:
-
-$$
-U = \mathrm{Integrator}(X^{Res}) = [u_1, u_2, \dots, u_m], \qquad U \in \mathbb{R}^{d\times m}
-$$
-
- This vector $U$ is used to correct the predicted latent state, allowing the model to account for nonlinearities and improve the accuracy of long-horizon forecasts.
+Since attention treats the sequence as an unordered set, order information is injected separately, typically via a fixed positional encoding added to the input embeddings before the first layer [@vaswani2017attention]. Stacking $N$ such layers, with no causal masking and no decoder cross-attention, gives the encoder-only variant used here: a bidirectional token mixer mapping $\mathbb{R}^{n\times d} \to \mathbb{R}^{n\times d}$ that captures both local and global dependencies across the input sequence of token embeddings.
 
 ### Variational Autoencoders
 
-While standard autoencoders compress high-dimensional data into a lower-dimensional latent space, they are inherently deterministic and lack the ability to model uncertainty in the latent representation. The encoder maps inputs to exact point estimates in the latent space rather than probabilistic distributions, resulting in disjoint and arbitrary predictions between points. Variational Autoencoders (VAEs) address this by introducing a probabilistic framework in which the encoder maps inputs to a probability distribution over a continuous latent variable $Z$. This latent variable forces the model to learn a structured and smooth representation of the data, allowing for improved sampling and interpolation. 
+While standard autoencoders compress high-dimensional data into a lower-dimensional latent space, they are inherently deterministic and lack the ability to model uncertainty in the latent representation [@hinton2006reducing]. The encoder maps inputs to exact point estimates in the latent space rather than probabilistic distributions, resulting in disjoint and arbitrary predictions between points [@doersch2016tutorial]. Variational Autoencoders (VAEs) address this by introducing a probabilistic framework in which the encoder maps inputs to a probability distribution over a continuous latent variable $Z$. This latent variable forces the model to learn a structured and smooth representation of the data, allowing for improved sampling and interpolation. 
 
-In our probabilistic time-series forecasting context, we aim to accurately model the conditional distribution of future observations $Y$, given an observed context window $X$. This ultimately requires finding the true posterior distribution $\mathbb{P}(Z|X)$, which is often intractable. VAEs approximate this true posterior with a variational distribution $\mathbb{Q}(Z|X)$, which is parameterized by the encoder. The VAE framework minimizes the Evidence Lower Bound (ELBO) loss to maximize the likelihood of the observed data while minimizing the divergence between the approximate and true posterior distributions:
+In our probabilistic time-series forecasting context, we aim to accurately model the conditional distribution of future observations $Y$, given an observed context window $X$. This ultimately requires finding the true posterior distribution $\mathbb{P}(Z|X)$, which is often intractable. VAEs approximate this true posterior with a variational distribution $\mathbb{Q}(Z|X)$, which is parameterized by the encoder. The VAE framework minimizes the Evidence Lower Bound (ELBO) loss to maximize the likelihood of the observed data while minimizing the divergence between the approximate and true posterior distributions [@kingma2014vae]:
 
 $$
 \mathcal{L}_{ELBO} = -\mathbb{E}[\log \mathbb{P}(Y|Z, X)] + D_{KL}(\mathbb{Q}(Z|X) || \mathbb{P}(Z|X))
-$$
+$$ {#eq-vae-elbo}
 
 This evidence lower bound consists of two terms: the reconstruction loss, which measures how well the model can reconstruct the observed data from the latent representation, and the Kullback-Leibler (KL) divergence, which regularizes the latent space by encouraging the approximate posterior to be close to our selected prior distribution. This forces the approximate posterior to remain smooth and continuous, which is crucial for generating coherent and realistic future predictions. By optimizing the ELBO, we can learn a latent representation that captures the underlying structure of the time-series data while also providing a measure of uncertainty in our predictions.
 
-When attempting to optimize this objective, we encounter a challenge: we must sample the latent variable $Z$ from the encoder's predicted distribution $\mathbb{Q}(Z|X)$, which is a stochastic operation that is not differentiable. To address this, we employ the reparameterization trick, which allows us to express the sampling operation as a deterministic function of the encoder's parameters and a separate source of randomness. This enables us to backpropagate gradients through the sampling process and optimize the model using standard gradient-based methods:
+When attempting to optimize this objective, we encounter a challenge: we must sample the latent variable $Z$ from the encoder's predicted distribution $\mathbb{Q}(Z|X)$, which is a stochastic operation that is not differentiable. To address this, we employ the reparameterization trick, which allows us to express the sampling operation as a deterministic function of the encoder's parameters and a separate source of randomness [@kingma2014vae]. This enables us to backpropagate gradients through the sampling process and optimize the model using standard gradient-based methods:
 
 $$
 Z = \mu + \sigma \odot \epsilon, \quad \epsilon \sim \mathcal{N}(0, I)
-$$
+$$ {#eq-vae-reparam}
 
-Rather than a standard neural network encoder and decoder architecture, we use a KoopmanNet, an Integrator, and a KalmanNet to form our encoder. This projects the input time-series into a latent measurement space, processes the nonlinear residuals, and refines the latent state estimate, returning an approximate posterior distribution. The decoder acts as an inverse measurement function, mapping the latent representation back to the original observation space. This allows us to generate future predictions while also providing a measure of uncertainty in our forecasts.
+Rather than a standard neural network encoder and decoder architecture, we use a KoopmanNet, an Integrator, and a KalmanNet to form our encoder [@k2vae2025]. This projects the input time-series into a latent measurement space, processes the nonlinear residuals, and refines the latent state estimate, returning an approximate posterior distribution. The decoder acts as an inverse measurement function, mapping the latent representation back to the original observation space. This allows us to generate future predictions while also providing a measure of uncertainty in our forecasts.
 
 ## K2VAE
+
+This chapter will make use of the theory and concepts introduced in the preliminaries to describe the K2VAE model. We will discuss its architecture, how the different components work and are integrated. We will also discuss the pre-processing steps required to prepare the data for input into the model, as well as the training objectives and loss functions used to optimize the model's performance.
 
 ### Pre-processing
 
@@ -272,13 +262,13 @@ The K2VAE model treats Probablistic Time Series Forecasting (PTSF) as a conditio
 
 $$
 X = [x_1, x_2, \dots, x_T] \in \mathbb{R}^{N \times T}
-$$
+$$ {#eq-k2vae-context}
 
 the objective is to model the conditional distribution over the forecasting horizon
 
 $$
 Y = [x_{T+1}, x_{T+2}, \dots, x_{T+L}] \in \mathbb{R}^{N \times L}, \qquad P(Y \mid X)
-$$
+$$ {#eq-k2vae-horizon}
 
 where $N$ is the number of variables, $T$ the context length, and $L$ the forecasting horizon.
 
@@ -289,18 +279,35 @@ A single training instance is fromed by a sliding window of length $T + L$ appli
 $$
 X^{(i)} = [\tilde{x}_i, \dots, \tilde{x}_{i+T-1}], \qquad
 Y^{(i)} = [\tilde{x}_{i+T}, \dots, \tilde{x}_{i+T+L-1}]
-$$
+$$ {#eq-k2vae-window}
 Where the number of windows for some sequence M = $\text{length(M)} - T - L + 1 $
 
 Each $X^{(i)}$ is then split into n overlapping patches of size s.
 $$
 X \in \mathbb{R}^{N \times T} \;\longrightarrow\; X^P \in \mathbb{R}^{N \times s \times n}, \qquad T = n \cdot s
-$$
+$$ {#eq-k2vae-patch}
 
 Each patch is then flattened across variables and with-in patch time and then projected to an embedding of dimension $d$. The projection weights are again only fitted using the training data to prevent leakage.
 
 $$
 X^{P'} = \mathrm{Projection}\big(\mathrm{Flatten}(X^P)\big) \in \mathbb{R}^{d \times n}
-$$
+$$ {#eq-k2vae-patch-embed}
 
 This data will the be treated as the input data into KoopmanNet.
+
+KoopmanNet ....
+
+The then define $X^{Res}$, the result of:
+$$
+X^{Res} = X^{P^{*}} - \hat{X^{C}}
+$$ {#eq-k2vae-residual}
+
+Where $X^{P^{*}}$ is the projected latent state and $\hat{X^{C}}$ is the reconstructed latent state from the Koopman operator. 
+
+This $X_{res}$ is fed into our tranformer which is called the integrator. It is used to capture the nonlinear residuals that arise from the linear approximation of the Koopman operator. The integrator processes this residual using an encoder-only transformer which is described in the preliminary above. It outputs a sequence of control inputs $U$ that span the prediction horizon:
+
+$$
+U = \mathrm{Integrator}(X^{Res}) = [u_1, u_2, \dots, u_m], \qquad U \in \mathbb{R}^{d\times m}
+$$ {#eq-k2vae-integrator}
+
+ This vector $U$ is used to correct the predicted latent state, allowing the model to account for nonlinearities and improve the accuracy of long-horizon forecasts.
