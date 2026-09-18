@@ -1,12 +1,16 @@
 ---
 title: "Thesis Plan"
-bibliography: K2VAE/Proposal/references.bib
+bibliography: references.bib
 date: today
 format:
   pdf:
     documentclass: book
     classoption: oneside
     fontsize: 11pt
+    include-in-header:
+      text: |
+        \providecommand{\abstractname}{Abstract}
+        \newenvironment{abstract}{\chapter*{\abstractname}}{}
 abstract: "This project studies K2VAE, a Koopman-Kalman enhanced variational autoencoder for probabilistic time-series forecasting. The aim is to determine whether a structured latent dynamics model can improve long-horizon forecasting by combining patch-based tokenisation, Koopman-inspired latent linearisation, KalmanNet-style refinement, and variational decoding. The project will evaluate prediction accuracy, uncertainty quality, and forecasting stability on benchmark datasets, then compare K2VAE against the state-of-the-art baselines used in the paper, with ablation studies if time permits."
 ---
 
