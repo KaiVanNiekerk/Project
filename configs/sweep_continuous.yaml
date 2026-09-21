@@ -17,6 +17,12 @@
 # Feed the winner into Phase 2 via BASE_HP_OVERRIDES (see
 # configs/sweep_architecture.yaml).
 program: src/sweep.py
+command:
+  - uv
+  - run
+  - python
+  - ${program}
+  - ${args}
 method: bayes
 metric:
   name: val_total
