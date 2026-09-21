@@ -18,7 +18,8 @@ class BaselineTrainer:
         train_loader,
         val_loader,
         device: str = "cpu",
-        patience: int = 10,
+        patience: int = 5,
+        min_delta: float = 0.001,
         checkpoint_dir: str = "checkpoints",
         checkpoint_name: str = "patchtst_best.pt",
         grad_clip_norm: float = 1.0,
@@ -31,6 +32,7 @@ class BaselineTrainer:
         self.val_loader = val_loader
         self.device = device
         self.patience = patience
+        self.min_delta = min_delta
         self.grad_clip_norm = grad_clip_norm
         self.use_wandb = use_wandb
         self.seed = seed
@@ -143,7 +145,7 @@ class BaselineTrainer:
         return {"total": avg_nll, "elbo": 0.0, "nll": avg_nll, "kl": 0.0, "rec": 0.0}
     
     def _checkpoint_step(self, val_loss: float, epoch: int) -> bool:
-        improved = val_loss < self.best_val_loss
+        improved = val_loss < (self.best_val_loss - self.min_delta)
         if improved:
             self.best_val_loss = val_loss
             self.best_epoch = epoch

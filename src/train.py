@@ -34,7 +34,8 @@ class Trainer:
         lambda_rec: float = 1.0,
         kl_weight: float = 0.01, # matches reference weight_beta; fixed, not annealed
         device: str = "cpu",
-        patience: int = 10,
+        patience: int = 5,
+        min_delta: float = 0.001,
         checkpoint_dir: str = "checkpoints",
         checkpoint_name: str = "k2vae_best.pt",
         grad_clip_norm: float = 1.0,
@@ -48,6 +49,7 @@ class Trainer:
         self.lambda_rec = lambda_rec
         self.device = device
         self.patience = patience
+        self.min_delta = min_delta
         self.grad_clip_norm = grad_clip_norm
         self.use_wandb = use_wandb
         self.seed = seed
@@ -257,7 +259,7 @@ class Trainer:
     
     # Checkpoints
     def _checkpoint_step(self, val_total_loss: float, epoch: int) -> bool:
-        improved = val_total_loss < self.best_val_loss
+        improved = val_total_loss < (self.best_val_loss - self.min_delta)
         if improved:
             self.best_val_loss = val_total_loss
             self.best_epoch = epoch
