@@ -16,6 +16,12 @@
 #   wandb agent <sweep_id>   # id printed by `wandb sweep`, all 27 runs
 #   python src/sweep.py --analyze <entity>/<project>/<sweep_id>
 program: src/sweep.py
+command:
+  - uv
+  - run
+  - python
+  - ${program}
+  - ${args}
 method: grid
 metric:
   name: val_total
