@@ -1,0 +1,29 @@
+# Phase 2 of the staged K2VAE sweep: architecture hyperparameters only.
+# lr/kl_weight/lambda_rec stay fixed at Phase 1's winning values, loaded via
+# the BASE_HP_OVERRIDES env var (see configs/sweep_continuous.yaml). Falls
+# back to configs/datasets_yaml/ETTh1-L.yaml's reference values if
+# BASE_HP_OVERRIDES isn't set.
+#
+# Each param is bracketed reference, 1 step down, 1 step up around its
+# ETTh1-L.yaml reference value (d=128, hidden_dim=256, hidden_layers=3):
+# width params halved/doubled, layer count +/-1 since it's a small integer
+# count rather than a scale-sensitive coefficient. method: grid here since
+# 3 values x 3 params = 27 runs is cheap enough to run exhaustively.
+#
+# Usage (run from the project root; PowerShell shown):
+#   wandb sweep configs/sweep_architecture.yaml
+#   $env:BASE_HP_OVERRIDES = "artifacts/sweeps/<phase1_sweep_id>_best.json"
+#   wandb agent <sweep_id>   # id printed by `wandb sweep`, all 27 runs
+#   python src/sweep.py --analyze <entity>/<project>/<sweep_id>
+program: src/sweep.py
+method: grid
+metric:
+  name: val_total
+  goal: minimize
+parameters:
+  d:
+    values: [64, 128, 256]
+  hidden_dim:
+    values: [128, 256, 512]
+  hidden_layers:
+    values: [2, 3, 4]

@@ -387,49 +387,9 @@ class Trainer:
             "mu": torch.cat(mu_all, dim=0) if mu_all else None,
             "sigma": torch.cat(sigma_all, dim=0) if sigma_all else None,
         }
-    
 
-# Minimal wandb-sweep entry point. lambda_rec is pulled from
-# wandb.config rather than hardcoded, since it's a sweep parameter.
-#
-# Chat to kai about this beofre creating but this is what sweep would look like.
-# Sweep config (save separately as sweep.yaml):
-#
-#   method: bayes
-#   metric:
-#     name: val_total
-#     goal: minimize
-#   parameters:
-#     lambda_rec:
-#       min: 0.01
-#       max: 10.0
-#       distribution: log_uniform_values
-# --------------------------------------------------------------------
- 
-def run_sweep_trial(build_model_fn, train_loader, val_loader, device="cpu"):
-    """
-    build_model_fn: callable -> (model, optimizer). Kept as an injected
-    function rather than constructed here, since K2VAE's constructor
-    args (input_dim, d, m, n, integrator_args) are experiment-specific
-    and shouldn't be hardcoded into the Trainer.
-    """
-    wandb.init()
-    config = wandb.config
- 
-    model, optimizer = build_model_fn()
- 
-    trainer = Trainer(
-        model=model,
-        optimizer=optimizer,
-        train_loader=train_loader,
-        val_loader=val_loader,
-        lambda_rec=config.lambda_rec,
-        device=device,
-        patience=config.get("patience", 10),
-        grad_clip_norm=config.get("grad_clip_norm", 1.0),
-        use_wandb=True,
-        checkpoint_name=f"k2vae_lambda{config.lambda_rec:.4f}.pt",
-    )
- 
-    result = trainer.fit(maxEpochs=config.get("max_epochs", 100))
-    wandb.log({"final_best_val_loss": result["best_val_loss"]})
+
+# wandb sweep entry point lives in sweep.py (kept out of this file so it
+# doesn't share a code path with normal single-config runs via run.py).
+# Two-phase sweep: configs/sweep_continuous.yaml then configs/sweep_architecture.yaml
+# (see the usage docstring at the top of sweep.py for the full chained workflow).
