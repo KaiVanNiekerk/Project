@@ -1,0 +1,30 @@
+# Phase 1 of the staged K2VAE sweep: continuous hyperparameters only.
+# Architecture (d, hidden_dim, hidden_layers) stays fixed at the reference
+# values from configs/datasets_yaml/ETTh1-L.yaml while this phase runs.
+#
+# Each param is bracketed reference, 1 step down, 1 step up around its
+# ETTh1-L.yaml reference value (lr=1e-3, kl_weight=0.01, lambda_rec=1.0),
+# halved/doubled since these are scale-sensitive coefficients. method: bayes
+# treats these as candidate values to explore adaptively rather than an
+# exhaustive grid, so a capped agent run count is enough.
+#
+# Usage (run from the project root):
+#   wandb sweep configs/sweep_continuous.yaml
+#   wandb agent --count 25 <sweep_id>   # id printed by the command above
+#   python src/sweep.py --analyze <entity>/<project>/<sweep_id>
+#       -> saves plots + artifacts/sweeps/<sweep_id>_best.json
+#
+# Feed the winner into Phase 2 via BASE_HP_OVERRIDES (see
+# configs/sweep_architecture.yaml).
+program: src/sweep.py
+method: bayes
+metric:
+  name: val_total
+  goal: minimize
+parameters:
+  lr:
+    values: [5.0e-4, 1.0e-3, 2.0e-3]
+  kl_weight:
+    values: [5.0e-3, 1.0e-2, 2.0e-2]
+  lambda_rec:
+    values: [0.5, 1.0, 2.0]
