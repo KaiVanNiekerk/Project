@@ -1,0 +1,18 @@
+program: src/sweep.py
+command:
+  - uv
+  - run
+  - python
+  - ${program}
+  - ${args}
+method: grid
+metric:
+  name: val_total
+  goal: minimize
+parameters:
+  d:
+    values: [32, 64, 128]
+  hidden_dim:
+    values: [64, 128, 256]
+  hidden_layers:
+    values: [1, 2, 3]
