@@ -18,5 +18,5 @@ hyperparameters:
     d_ff: 256      
     n_layers: 1    
     dropout: 0.1
-  tuned: false
-  sweep_id: null
+  tuned: true
+  sweep_id: 6mtimrqv
