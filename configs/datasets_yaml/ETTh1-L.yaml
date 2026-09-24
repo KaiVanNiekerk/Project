@@ -7,7 +7,7 @@ horizon_window: 96   # paper sweeps L in {96, 192, 336, 720}; this is the first 
 feature_names: [HUFL, HULL, MUFL, MULL, LUFL, LULL, OT]
 hyperparameters:
   lr: 0.002
-  d: 256
+  d: 128
   lambda_rec: 0.5
   hidden_dim: 256  
   hidden_layers: 2
