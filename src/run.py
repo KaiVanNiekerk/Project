@@ -1,3 +1,5 @@
+import dataclasses
+import json
 import os
 import torch
 import yaml
@@ -11,18 +13,16 @@ from plot_data import PlotDataCollector
 from plotting import PlotManager
 
 
-def main():
-    # Environment overrides keep dataset and smoke-test selection outside the
-    # source file, making repeated experiments easier to launch.
-    DATASET_CONFIG_PATH = Path(
-        os.environ.get("DATASET_CONFIG", "configs/datasets_yaml/ETTh1-L.yaml")
-    )
-    with DATASET_CONFIG_PATH.open("r", encoding="utf-8") as f:
-        cfg = yaml.safe_load(f)
+# Long-term forecasting horizons used in the paper's tables.
+DEFAULT_HORIZONS = [96, 192, 336, 720]
 
+
+def run_horizon(cfg: dict, DATASET_CONFIG_PATH: Path, L: int) -> dict:
+    """Train/evaluate one forecast horizon L and return its test metrics."""
     CSV_PATH = cfg["csv_path"]
     DATASET_NAME = cfg["dataset_name"]
-    T, L, patch_size = cfg["input_window"], cfg["horizon_window"], cfg["patch_size"]
+    T, patch_size = cfg["input_window"], cfg["patch_size"]
+    tag = f"L{L}"
 
     hp = cfg["hyperparameters"]
     D = hp["d"]
@@ -69,7 +69,7 @@ def main():
         kl_weight=KL_WEIGHT,
         device=DEVICE,
         use_wandb=LOG_TO_WANDB,
-        checkpoint_name=f"k2vae_{DATASET_NAME}.pt",
+        checkpoint_name=f"k2vae_{DATASET_NAME}_{tag}.pt",
     )
 
     result = trainer.fit(maxEpochs=MAX_EPOCHS)
@@ -92,16 +92,31 @@ def main():
     )
     print(f"test NMAE: {test_nmae.item():.4f}")
     print(f"test CRPS: {test_result['losses']['crps']:.4f}")
+
+    metrics = {
+        "dataset": DATASET_NAME,
+        "input_window": T,
+        "horizon": L,
+        "nmae": test_nmae.item(),
+        "crps": float(test_result["losses"]["crps"]),
+        "test_losses": {k: float(v) for k, v in test_result["losses"].items()},
+        "best_epoch": trainer.best_epoch,
+    }
+    results_dir = Path("artifacts/results") / DATASET_NAME
+    results_dir.mkdir(parents=True, exist_ok=True)
+    with (results_dir / f"{tag}.json").open("w", encoding="utf-8") as f:
+        json.dump(metrics, f, indent=2)
     
     # ---- plotting ----
     if GENERATE_PLOTS:
         plot_cfg = PlotDataCollector.load_dataset_plot_config(DATASET_CONFIG_PATH)
+        plot_cfg = dataclasses.replace(plot_cfg, horizon_window=L)
         plot_manager = PlotManager(cfg=plot_cfg, run_id=DATASET_NAME)
 
         # Loss curves, from EpochHistory accumulated in Trainer.fit()
         loss_figs = plot_manager.plot_loss_curves(trainer.history)
         for i, fig in enumerate(loss_figs):
-            plot_manager.save(fig, f"loss_curves_{i}")
+            plot_manager.save(fig, f"loss_curves_{i}_{tag}")
 
         # Forecast vs truth + residuals, from the test-set tensors
         collector = PlotDataCollector(scaler=scaler)
@@ -121,11 +136,39 @@ def main():
         features_to_plot = list(range(min(6, num_features)))
         forecast_fig = plot_manager.plot_forecast_vs_truth(forecast_batch, feature_idx=features_to_plot)
 
-        plot_manager.save(forecast_fig, "forecast_vs_truth")
+        plot_manager.save(forecast_fig, f"forecast_vs_truth_{tag}")
 
         residuals = PlotDataCollector.compute_horizon_residuals(forecast_batch)
         residual_fig = plot_manager.plot_residual_by_horizon(residuals)
-        plot_manager.save(residual_fig, "residual_by_horizon")
+        plot_manager.save(residual_fig, f"residual_by_horizon_{tag}")
+    return metrics
+
+
+def main():
+    # Environment overrides keep dataset and smoke-test selection outside the
+    # source file, making repeated experiments easier to launch.
+    DATASET_CONFIG_PATH = Path(
+        os.environ.get("DATASET_CONFIG", "configs/datasets_yaml/ETTh1-L.yaml")
+    )
+    with DATASET_CONFIG_PATH.open("r", encoding="utf-8") as f:
+        cfg = yaml.safe_load(f)
+
+    # HORIZONS="96,192" restricts the sweep, e.g. for smoke tests.
+    horizons = [
+        int(h) for h in os.environ.get("HORIZONS", "").split(",") if h.strip()
+    ] or DEFAULT_HORIZONS
+
+    all_metrics = []
+    for L in horizons:
+        print(f"\n===== {cfg['dataset_name']} | horizon L={L} =====")
+        all_metrics.append(run_horizon(cfg, DATASET_CONFIG_PATH, L))
+
+    print("\nHorizon | NMAE | CRPS")
+    for m in all_metrics:
+        print(f"{m['horizon']:>7} | {m['nmae']:.4f} | {m['crps']:.4f}")
+    summary_dir = Path("artifacts/results") / cfg["dataset_name"]
+    with (summary_dir / "summary.json").open("w", encoding="utf-8") as f:
+        json.dump(all_metrics, f, indent=2)
 
 
 if __name__ == "__main__":
