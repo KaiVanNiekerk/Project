@@ -258,6 +258,8 @@ This chapter will make use of the theory and concepts introduced in the prelimin
 
 ### Pre-processing
 
+--- FLAG: Add dimensionality?
+
 The pipeline below is applied to all datasets assessed within this work. We have selected four of the original paper datasets in order to compare with their benchmarks. These datasets have all been pre-cleaned and prepared by the original authors and we have only extracted them. These are ... We will also be evaluating the model on two of our own datasets. We have manually cleaned and prepared them for input into the model's pre-processing pipeline.
 
 The K2VAE model treats Probablistic Time Series Forecasting (PTSF) as a conditional generative task. Given a multivariate context series:
@@ -421,3 +423,27 @@ $$
 $$ {#eq-k2vae-decoder-sigma}
 
 A specific numerical adjustment is required during this standard deviation decoding phase. As shown in @eq-k2vae-decoder-sigma, the model applies a softplus activation to ensure the standard deviation remains strictly positive, followed immediately by the addition of a defined minimum value, the sigma floor ($\sigma_{\text{floor}}$). Preventing the standard deviation from approaching zero is necessary because a near-zero variance causes the Gaussian negative log-likelihood loss function to approach infinity, leading to optimization failures during training. Once decoded, these outputs are denormalized by the RevIN module to produce the final probabilistic predictions in their original physical scale.
+
+## Results and Experiments
+
+### Libraries - Ask Jake
+
+### Preprocessing and data cleaning - Clarify with jake
+
+Is this just explaining what the datasets are, where we got them? What they look like date - variables, we drop the dates to get into correct format. Then we discuss the dimensions of the preproccessing pipeline, maybe move its whole discussion here? 
+
+### Hyper parameter tuning
+
+We use wandb ...
+
+### Other models - is the two we choose fine, both Point predictors none of the other type.
+
+#### PatchTST
+
+#### Koopa
+
+### Results
+
+### Ablations
+
+### Our paper vs The reference - Ask Jake

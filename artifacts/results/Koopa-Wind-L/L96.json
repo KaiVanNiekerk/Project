@@ -1,0 +1,17 @@
+{
+  "model": "koopa",
+  "dataset": "Wind-L",
+  "input_window": 96,
+  "horizon": 96,
+  "nmae": 0.07454788684844971,
+  "crps": 0.49036362506616277,
+  "test_losses": {
+    "total": 1.168431067279636,
+    "nll": 1.168431067279636,
+    "crps": 0.49036362506616277,
+    "elbo": 0.0,
+    "kl": 0.0,
+    "rec": 0.0
+  },
+  "best_epoch": 6
+}

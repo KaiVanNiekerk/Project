@@ -1,0 +1,17 @@
+{
+  "model": "koopa",
+  "dataset": "ETTh1-L",
+  "input_window": 96,
+  "horizon": 96,
+  "nmae": 0.34947270154953003,
+  "crps": 0.3476863566197847,
+  "test_losses": {
+    "total": 0.8607848835618872,
+    "nll": 0.8607848835618872,
+    "crps": 0.3476863566197847,
+    "elbo": 0.0,
+    "kl": 0.0,
+    "rec": 0.0
+  },
+  "best_epoch": 10
+}

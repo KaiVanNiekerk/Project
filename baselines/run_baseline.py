@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import dataclasses
+import json
 import os
 import sys
 from pathlib import Path
@@ -20,21 +22,20 @@ from plot_data import PlotDataCollector
 from plotting import EpochHistory, PlotManager
 
 
-def main() -> None:
-    """Train one isolated baseline using the shared CLI splits and plot contract."""
-    model_name = os.environ.get("BASELINE_MODEL", "patchtst").lower()
-    config_path = Path(os.environ.get("DATASET_CONFIG", "configs/datasets_yaml/ETTh1-L.yaml"))
+# Long-term forecasting horizons used in the paper's tables.
+DEFAULT_HORIZONS = [96, 192, 336, 720]
+
+
+def run_horizon(model_name: str, config_path: Path, config: dict, target_window: int) -> dict:
+    """Train one isolated baseline at one horizon using the shared CLI splits and plot contract."""
     max_epochs = int(os.environ.get("MAX_EPOCHS", "10"))
     batch_size = int(os.environ.get("BATCH_SIZE", "32"))
     use_wandb = os.environ.get("USE_WANDB", "false").lower() in ("true", "1", "yes")
     device = "cuda" if torch.cuda.is_available() else "cpu"
-
-    with config_path.open("r", encoding="utf-8") as handle:
-        config = yaml.safe_load(handle)
+    tag = f"L{target_window}"
 
     hp = config["hyperparameters"]
     context_window = config["input_window"]
-    target_window = config["horizon_window"]
 
     cli = CLI(datasets_dir="datasets")
     train_loader, val_loader, test_loader, _, _, scaler = cli.load(
@@ -79,7 +80,7 @@ def main() -> None:
         val_loader=val_loader,
         device=device,
         use_wandb=use_wandb,
-        checkpoint_name=f"{model_name}_{config['dataset_name']}.pt",
+        checkpoint_name=f"{model_name}_{config['dataset_name']}_{tag}.pt",
     )
 
     result = trainer.fit(max_epochs)
@@ -108,7 +109,24 @@ def main() -> None:
         "skipped_batches": evaluation["n_skipped"],
     })
 
-    plot_config = PlotDataCollector.load_dataset_plot_config(config_path)
+    metrics = {
+        "model": model_name,
+        "dataset": config["dataset_name"],
+        "input_window": context_window,
+        "horizon": target_window,
+        "nmae": float(original_nmae),
+        "crps": float(evaluation["losses"]["crps"]),
+        "test_losses": {k: float(v) for k, v in evaluation["losses"].items()},
+        "best_epoch": result.get("best_epoch", -1),
+    }
+    results_dir = Path("artifacts/results") / run_name
+    results_dir.mkdir(parents=True, exist_ok=True)
+    with (results_dir / f"{tag}.json").open("w", encoding="utf-8") as handle:
+        json.dump(metrics, handle, indent=2)
+
+    plot_config = dataclasses.replace(
+        PlotDataCollector.load_dataset_plot_config(config_path), horizon_window=target_window
+    )
     plot_manager = PlotManager(plot_config, run_id=run_name)
 
     # Populate skipped_batches to satisfy EpochHistory dataclass
@@ -128,7 +146,7 @@ def main() -> None:
     )
 
     for index, figure in enumerate(plot_manager.plot_loss_curves(history)):
-        plot_manager.save(figure, f"loss_curves_{index}")
+        plot_manager.save(figure, f"loss_curves_{index}_{tag}")
 
     forecast = PlotDataCollector(scaler=scaler).collect_forecast_batch(
         x_h_true=evaluation["X_H"],
@@ -140,8 +158,33 @@ def main() -> None:
         inverse_scale=True,
         patched=False,
     )
-    plot_manager.save(plot_manager.plot_forecast_vs_truth(forecast, feature_idx=list(range(min(6, features)))), "forecast_vs_truth")
-    plot_manager.save(plot_manager.plot_residual_by_horizon(PlotDataCollector.compute_horizon_residuals(forecast)), "residual_by_horizon")
+    plot_manager.save(plot_manager.plot_forecast_vs_truth(forecast, feature_idx=list(range(min(6, features)))), f"forecast_vs_truth_{tag}")
+    plot_manager.save(plot_manager.plot_residual_by_horizon(PlotDataCollector.compute_horizon_residuals(forecast)), f"residual_by_horizon_{tag}")
+    return metrics
+
+
+def main() -> None:
+    model_name = os.environ.get("BASELINE_MODEL", "patchtst").lower()
+    config_path = Path(os.environ.get("DATASET_CONFIG", "configs/datasets_yaml/Etth1-L.yaml"))
+    with config_path.open("r", encoding="utf-8") as handle:
+        config = yaml.safe_load(handle)
+
+    # HORIZONS="96,192" restricts the sweep, e.g. for smoke tests.
+    horizons = [
+        int(h) for h in os.environ.get("HORIZONS", "").split(",") if h.strip()
+    ] or DEFAULT_HORIZONS
+
+    all_metrics = []
+    for horizon in horizons:
+        print(f"\n===== {model_name} | {config['dataset_name']} | horizon L={horizon} =====")
+        all_metrics.append(run_horizon(model_name, config_path, config, horizon))
+
+    print("\nHorizon | NMAE | CRPS")
+    for m in all_metrics:
+        print(f"{m['horizon']:>7} | {m['nmae']:.4f} | {m['crps']:.4f}")
+    summary_dir = Path("artifacts/results") / f"{model_name.title()}-{config['dataset_name']}"
+    with (summary_dir / "summary.json").open("w", encoding="utf-8") as handle:
+        json.dump(all_metrics, handle, indent=2)
 
 
 if __name__ == "__main__":
