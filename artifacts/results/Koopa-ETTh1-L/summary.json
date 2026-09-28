@@ -1,0 +1,70 @@
+[
+  {
+    "model": "koopa",
+    "dataset": "ETTh1-L",
+    "input_window": 96,
+    "horizon": 96,
+    "nmae": 0.34947270154953003,
+    "crps": 0.3476863566197847,
+    "test_losses": {
+      "total": 0.8607848835618872,
+      "nll": 0.8607848835618872,
+      "crps": 0.3476863566197847,
+      "elbo": 0.0,
+      "kl": 0.0,
+      "rec": 0.0
+    },
+    "best_epoch": 10
+  },
+  {
+    "model": "koopa",
+    "dataset": "ETTh1-L",
+    "input_window": 96,
+    "horizon": 192,
+    "nmae": 0.36721205711364746,
+    "crps": 0.38232587461602197,
+    "test_losses": {
+      "total": 0.9910902127827683,
+      "nll": 0.9910902127827683,
+      "crps": 0.38232587461602197,
+      "elbo": 0.0,
+      "kl": 0.0,
+      "rec": 0.0
+    },
+    "best_epoch": 7
+  },
+  {
+    "model": "koopa",
+    "dataset": "ETTh1-L",
+    "input_window": 96,
+    "horizon": 336,
+    "nmae": 0.38068896532058716,
+    "crps": 0.4057953979658044,
+    "test_losses": {
+      "total": 1.0613413833189702,
+      "nll": 1.0613413833189702,
+      "crps": 0.4057953979658044,
+      "elbo": 0.0,
+      "kl": 0.0,
+      "rec": 0.0
+    },
+    "best_epoch": 10
+  },
+  {
+    "model": "koopa",
+    "dataset": "ETTh1-L",
+    "input_window": 96,
+    "horizon": 720,
+    "nmae": 0.43976083397865295,
+    "crps": 0.4741785050484172,
+    "test_losses": {
+      "total": 1.2226589092037135,
+      "nll": 1.2226589092037135,
+      "crps": 0.4741785050484172,
+      "elbo": 0.0,
+      "kl": 0.0,
+      "rec": 0.0
+    },
+    "best_epoch": 8
+  }
+]

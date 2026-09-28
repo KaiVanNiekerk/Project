@@ -1,0 +1,22 @@
+dataset_name: Wind-L
+csv_path: Wind/Wind.csv
+num_features: 7
+patch_size: 24
+input_window: 96
+horizon_window: 96   # paper sweeps L in {96, 192, 336, 720}; this is the first setting
+feature_names: [pred_w_speed, pred_w_dir, pred_temp, pred_pressure, pred_humidity, ture_w_speed, target]
+hyperparameters:
+  lr: 0.002
+  d: 128
+  lambda_rec: 0.5
+  hidden_dim: 256  
+  hidden_layers: 2
+  kl_weight: 0.01 
+  integrator:
+    d_model: 128   
+    n_heads: 4
+    d_ff: 256      
+    n_layers: 1    
+    dropout: 0.1
+  tuned: false  # hyperparameters copied from ETTh1-L, not tuned on Wind
+  sweep_id: null  # source sweep: ETTh1-L 6mtimrqv
