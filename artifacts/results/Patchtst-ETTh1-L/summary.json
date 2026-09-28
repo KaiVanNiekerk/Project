@@ -1,0 +1,70 @@
+[
+  {
+    "model": "patchtst",
+    "dataset": "ETTh1-L",
+    "input_window": 96,
+    "horizon": 96,
+    "nmae": 0.33719998598098755,
+    "crps": 0.3446287183385146,
+    "test_losses": {
+      "total": 0.8626432818801779,
+      "nll": 0.8626432818801779,
+      "crps": 0.3446287183385146,
+      "elbo": 0.0,
+      "kl": 0.0,
+      "rec": 0.0
+    },
+    "best_epoch": 5
+  },
+  {
+    "model": "patchtst",
+    "dataset": "ETTh1-L",
+    "input_window": 96,
+    "horizon": 192,
+    "nmae": 0.3503396809101105,
+    "crps": 0.36462577932501494,
+    "test_losses": {
+      "total": 0.9239613577111127,
+      "nll": 0.9239613577111127,
+      "crps": 0.36462577932501494,
+      "elbo": 0.0,
+      "kl": 0.0,
+      "rec": 0.0
+    },
+    "best_epoch": 4
+  },
+  {
+    "model": "patchtst",
+    "dataset": "ETTh1-L",
+    "input_window": 96,
+    "horizon": 336,
+    "nmae": 0.37044304609298706,
+    "crps": 0.40536487361659174,
+    "test_losses": {
+      "total": 1.0442299929218015,
+      "nll": 1.0442299929218015,
+      "crps": 0.40536487361659174,
+      "elbo": 0.0,
+      "kl": 0.0,
+      "rec": 0.0
+    },
+    "best_epoch": 4
+  },
+  {
+    "model": "patchtst",
+    "dataset": "ETTh1-L",
+    "input_window": 96,
+    "horizon": 720,
+    "nmae": 0.41493603587150574,
+    "crps": 0.4544179795081155,
+    "test_losses": {
+      "total": 1.162706272643909,
+      "nll": 1.162706272643909,
+      "crps": 0.4544179795081155,
+      "elbo": 0.0,
+      "kl": 0.0,
+      "rec": 0.0
+    },
+    "best_epoch": 3
+  }
+]

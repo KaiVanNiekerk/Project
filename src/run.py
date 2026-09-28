@@ -148,7 +148,7 @@ def main():
     # Environment overrides keep dataset and smoke-test selection outside the
     # source file, making repeated experiments easier to launch.
     DATASET_CONFIG_PATH = Path(
-        os.environ.get("DATASET_CONFIG", "configs/datasets_yaml/ETTh1-L.yaml")
+        os.environ.get("DATASET_CONFIG", "configs/datasets_yaml/Wind-L.yaml")
     )
     with DATASET_CONFIG_PATH.open("r", encoding="utf-8") as f:
         cfg = yaml.safe_load(f)

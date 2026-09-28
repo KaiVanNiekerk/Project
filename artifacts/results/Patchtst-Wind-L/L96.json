@@ -1,0 +1,17 @@
+{
+  "model": "patchtst",
+  "dataset": "Wind-L",
+  "input_window": 96,
+  "horizon": 96,
+  "nmae": 0.07336288690567017,
+  "crps": 0.48517567634315234,
+  "test_losses": {
+    "total": 1.0480420288750945,
+    "nll": 1.0480420288750945,
+    "crps": 0.48517567634315234,
+    "elbo": 0.0,
+    "kl": 0.0,
+    "rec": 0.0
+  },
+  "best_epoch": 7
+}

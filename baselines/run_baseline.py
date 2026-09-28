@@ -165,7 +165,7 @@ def run_horizon(model_name: str, config_path: Path, config: dict, target_window:
 
 def main() -> None:
     model_name = os.environ.get("BASELINE_MODEL", "patchtst").lower()
-    config_path = Path(os.environ.get("DATASET_CONFIG", "configs/datasets_yaml/ETTh1-L.yaml"))
+    config_path = Path(os.environ.get("DATASET_CONFIG", "configs/datasets_yaml/Etth1-L.yaml"))
     with config_path.open("r", encoding="utf-8") as handle:
         config = yaml.safe_load(handle)
 

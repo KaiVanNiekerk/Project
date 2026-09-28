@@ -1,0 +1,32 @@
+NOTE_ON_VALIDATION
+
+Summary:
+The codebase is currently optimizing a likelihood-based objective, not a CRPS-based objective. In the K2VAE path, training loss is built from the ELBO / negative log-likelihood (NLL) term, plus KL and reconstruction terms; in the baseline PatchTST path, evaluation computes CRPS separately as a test-time metric, but the training objective is still NLL-based. This means the raw loss curves are expected to be dominated by NLL, especially when the sigma (uncertainty) term is poorly calibrated.
+
+Why NLL dominates training curves:
+- NLL is extremely sensitive to uncertainty calibration, not just point accuracy.
+- If sigma is underestimated, the log-likelihood becomes very large (negative log probability) even when the mean forecast is reasonable.
+- The NLL term therefore often dwarfs the scale of rec or KL in the plotted loss curves.
+- This is a property of the objective, not necessarily evidence that the model is failing at forecasting.
+
+CRPS implementation:
+The CRPS function in src/metrics.py is the standard empirical CRPS identity:
+    CRPS(F_n, x) = E|X - x| - 0.5 * E|X - X'|
+This is mathematically valid for empirical predictive samples and is used as a proper scoring rule for probabilistic forecasting evaluation.
+
+Important caveat:
+- CRPS is computed from sampled predictive draws and represents a distributional quality metric.
+- It is not the same as the training objective being optimized.
+- So a model can have a large NLL loss while still producing competitive CRPS / NMAE values.
+
+Why tuning does not remove the effect completely:
+- Hyperparameter tuning changes the optimization trade-offs, but it does not change the fact that the training objective is likelihood-based.
+- If the model remains miscalibrated or overconfident, the NLL term will still dominate.
+- This means the loss curve should be interpreted as an optimization signal, not as a direct measure of downstream forecast quality.
+
+Practical interpretation for comparison tables:
+Use NMAE and CRPS as the primary comparison metrics for forecasting quality, because they are the metrics aligned with the paper's evaluation goals.
+The loss curve can still be useful for diagnosing training stability and calibration, but it should not be read as a one-to-one indicator of final forecasting performance.
+
+Conclusion:
+The current setup is internally consistent: the project is optimizing NLL while evaluating CRPS and NMAE as reporting metrics. The NLL-heavy curves are therefore expected behavior under the objective, rather than an obvious calculation error.
