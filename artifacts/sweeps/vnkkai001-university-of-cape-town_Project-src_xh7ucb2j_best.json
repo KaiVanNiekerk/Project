@@ -1,0 +1,8 @@
+{
+  "lr": 0.001,
+  "kl_weight": 0.1,
+  "lambda_rec": 0.5,
+  "d": 128,
+  "hidden_dim": 256,
+  "hidden_layers": 1
+}

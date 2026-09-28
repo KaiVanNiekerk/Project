@@ -4,19 +4,19 @@ num_features: 8
 patch_size: 10
 input_window: 30
 horizon_window: 30
-feature_names: ["0", "1", "2", "3", "4", "5", "6", OT]
+feature_names: ["0", "1", "2", "3", "4", "5", "6", "OT"]
 hyperparameters:
-  lr: 1.0e-3
+  lr: 0.001
   d: 128
-  lambda_rec: 1.0
-  hidden_dim: 128
-  hidden_layers: 3
-  kl_weight: 0.001
+  lambda_rec: 0.5
+  hidden_dim: 256
+  hidden_layers: 1
+  kl_weight: 0.1
   integrator:
     d_model: 128
     n_heads: 4
     d_ff: 256
     n_layers: 1
     dropout: 0.1
-  tuned: false
-  sweep_id: null
+  tuned: true
+  sweep_id: "xh7ucb2j"
