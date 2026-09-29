@@ -6,17 +6,17 @@ input_window: 96
 horizon_window: 96
 feature_names: ['traffic_volume', 'temp', 'clouds_all']
 hyperparameters:
-  lr: 0.0005
-  d: 64
-  lambda_rec: 1.0
-  hidden_dim: 128
-  hidden_layers: 2
-  kl_weight: 0.05
+  lr: 0.001
+  d: 128
+  lambda_rec: 0.5
+  hidden_dim: 256
+  hidden_layers: 1
+  kl_weight: 0.1
   integrator:
-    d_model: 64
+    d_model: 128
     n_heads: 4
-    d_ff: 128
+    d_ff: 256
     n_layers: 1
     dropout: 0.1
-  tuned: false
-  sweep_id: null
+  tuned: true
+  sweep_id: "xh7ucb2j"
