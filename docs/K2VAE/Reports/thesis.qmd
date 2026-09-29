@@ -7,6 +7,8 @@ format:
     documentclass: book
     classoption: oneside
     fontsize: 11pt
+    geometry:
+      - margin=1in
     include-in-header:
       text: |
         \providecommand{\abstractname}{Abstract}
@@ -230,7 +232,7 @@ $W_1$ and $W_2$ are learnable weight matrices, and $b_1$ and $b_2$ are learnable
 
 Both the multihead attention and the feedforward network are wrapped in residual connections and layer normalization, which help stabilize training and improve convergence.
 
-Since attention treats the sequence as an unordered set, order information is injected separately, typically via a fixed positional encoding added to the input embeddings before the first layer [@vaswani2017attention]. Stacking $N$ such layers, with no causal masking and no decoder cross-attention, gives the encoder-only variant used here: a bidirectional token mixer mapping $\mathbb{R}^{n\times d} \to \mathbb{R}^{n\times d}$ that captures both local and global dependencies across the input sequence of token embeddings.
+Since attention treats the sequence as an unordered set, order information is injected separately, typically via a fixed positional encoding added to the input embeddings before the first layer [@vaswani2017attention]. Stacking $N$ such layers, with no causal masking and no decoder cross-attention, gives the encoder-only variant used here: a bidirectional token mixer mapping $\mathbb{R}^{n\times d} \to \mathbb{R}^{n\times d}$ that captures both local and global dependencies across the input sequence of token embeddings. K$^2$VAE makes use of a transformer encoder to process the left of nonlinearity that koopman does not capture. We call this the Integrator.
 
 ### Variational Autoencoders
 
@@ -258,9 +260,7 @@ This chapter will make use of the theory and concepts introduced in the prelimin
 
 ### Pre-processing
 
---- FLAG: Add dimensionality?
-
-The pipeline below is applied to all datasets assessed within this work. We have selected four of the original paper datasets in order to compare with their benchmarks. These datasets have all been pre-cleaned and prepared by the original authors and we have only extracted them. These are ... We will also be evaluating the model on two of our own datasets. We have manually cleaned and prepared them for input into the model's pre-processing pipeline.
+The pipeline below is applied to all datasets assessed within this work. We have selected two of the original paper datasets in order to compare with their benchmarks. These datasets have all been pre-cleaned and prepared by the original authors and we have only extracted them. These are ETTh-L as well as Exchange-S. We will also be evaluating the model on two of our own datasets namely Wind-L and Congestion-S. The datasets themselves will be explained in more detail in the results and experiments section.
 
 The K2VAE model treats Probablistic Time Series Forecasting (PTSF) as a conditional generative task. Given a multivariate context series:
 
@@ -276,9 +276,9 @@ $$ {#eq-k2vae-horizon}
 
 where $N$ is the number of variables, $T$ the context length, and $L$ the forecasting horizon.
 
-The series is split into three sets, namely the training set ($p_\text{train}$), the validation set ($p_\text{val}$) and the test set ($p_\text{test}$). These three sets are split as in to keep temporal order and thus have not been shuffled in order to preserve the nature of the time series. We have used a split of 0.75, 0.15 and 0.15 respectively. We then apply standardisation to the training data which is then applied to the validation and test sets in order to prevent any leakage.
+The series is split into three sets, namely the training set ($p_\text{train}$), the validation set ($p_\text{val}$) and the test set ($p_\text{test}$). These three sets are split as in to keep temporal order and thus have not been shuffled in order to preserve the nature of the time series. We have used a split of 0.70, 0.15 and 0.15 respectively. We then apply standardisation to the training data. The same standardisation values are then applied to the validation and test sets in order to prevent any leakage.
 
-A single training instance is fromed by a sliding window of length $T + L$ applied across the standardised time series ($\tilde{x}$), one step at a time offset by i:
+A single training instance is formed by a sliding window of length $T + L$ applied across the standardised time series ($\tilde{x}$), one step at a time offset by i:
 
 $$
 X^{(i)} = [\tilde{x}_i, \dots, \tilde{x}_{i+T-1}], \qquad
@@ -286,25 +286,37 @@ Y^{(i)} = [\tilde{x}_{i+T}, \dots, \tilde{x}_{i+T+L-1}]
 $$ {#eq-k2vae-window}
 Where the number of windows for some sequence M = $\text{length(M)} - T - L + 1 $
 
-Each $X^{(i)}$ is then split into n overlapping patches of size s.
+Each context window $X^{(i)}$ is then divided into $n$ non-overlapping patches of size $s$:
+
 $$
-X \in \mathbb{R}^{N \times T} \;\longrightarrow\; X^P \in \mathbb{R}^{N \times s \times n}, \qquad T = n \cdot s
+X \in \mathbb{R}^{N \times T} \;\longrightarrow\; X^P \in \mathbb{R}^{N \times s \times n}, \qquad s = T / n
 $$ {#eq-k2vae-patch}
 
-Each patch is then flattened across variables and with-in patch time and then projected to an embedding of dimension $d$. The projection weights are again only fitted using the training data to prevent leakage.
+so that a single patch $x_i^P \in \mathbb{R}^{N \times s}$ holds every variable over a contiguous block of $s$ time steps. It is worth separating the two senses in which the data is windowed here: consecutive sliding windows overlap heavily, as they advance one time step at a time, whereas the patches within any single window are disjoint. Patching is a pure reshape, so $T$ must be divisible by $s$. The horizon carries the same divisibility requirement through $m = L / s$. This is purely a count of the latent tokens the model rolls forward rather than an operation applied to $Y$ itself. We need $m$ to determine the dimensionality for the integrator. $Y$ remains in its raw temporal layout so that the predictive likelihood can be evaluated directly against it. Both conditions are checked when a dataset is loaded so that an incompatible $(T, L, s)$ configuration fails at the entry point rather than silently mis-shaping a tensor deeper in the pipeline. These two counts matter beyond the preprocessing stage, as every subsequent component operates over $n$ context tokens and $m$ horizon tokens rather than over the $T$ and $L$ raw time steps.
+
+Each patch is then flattened across both variables and within-patch time, collapsing its $N \times s$ values into a single vector. The resulting $\mathbb{R}^{(N \times s) \times n}$ matrix is then mapped to an embedding of dimension $d$ by one linear projection applied identically to all $n$ patches:
 
 $$
 X^{P'} = \mathrm{Projection}\big(\mathrm{Flatten}(X^P)\big) \in \mathbb{R}^{d \times n}
 $$ {#eq-k2vae-patch-embed}
 
-This data will the be treated as the input data into KoopmanNet.
+Flattening across the variable axis before projecting is a deliberate design choice. Channel-independent models patch and project each variable separately, whereas treating the multivariate patch as a single token forces the projection to fuse the variables, allowing cross-variable interaction to be modelled implicitly during the state transition that follows [@k2vae2025]. This projection is a learnable layer trained jointly with the rest of the model, so like the scaler it is only ever exposed to the training split.
+
+Although patching and embedding are presented here as part of the input pipeline, they are not applied at data loading time. The loader returns raw temporal tensors and both steps are performed inside the model, an ordering required so that instance normalisation observes a continuous temporal axis. The reasoning is set out in the section on Reversible Instance Normalization.
+
+Finally, all tensors described here carry an additional leading batch dimension $B$, fixed at 32 following the original paper, which is suppressed throughout the notation for readability.
+
+This data will then be treated as the input data into KoopmanNet.
 
 ### Model pipeline 
 
 We first split our time series into 70% training data, 15% validation data and 15% test data.
 
-![The K$^2$VAE architecture pipeline. The input time series $X$ is patched and embedded into $X^{P'}$, then mapped by KoopmanNet's measurement function $\psi$ into the latent observable space $X^{P*}$. A combined Koopman operator $\mathcal{K}$ (a local, eDMD-derived component $\mathcal{K}_{loc}$ plus a learnable global component $\mathcal{K}_{glo}$) is applied iteratively to reconstruct the context $\hat{X}^C$ and roll forward the forecast, with the reconstruction residual $X^{Res} = X^{P*} - \hat{X}^C$ isolating the nonlinear dynamics the linear operator could not capture. This residual is passed to the Integrator, which produces a control sequence $U$. KalmanNet then combines $U$ with the learned process model ($w_k \sim \mathcal{N}(0,Q)$) and observation model ($v_k \sim \mathcal{N}(0,R)$), iterating the predict-update recursion $k$ times to refine the latent mean $Z$ and covariance $P$ into $Z'$. This defines the approximate posterior $\mathbb{Q}(Z\mid X) = \mathcal{N}(Z', P)$, from which a latent code is drawn via the reparameterization trick (scaling a standard normal draw by the Cholesky factor $L$ of $P$ and resampling). The decoder $\psi^{-1}$ maps this sample to the final predictive distribution $\mathbb{P}(Y\mid Z)$. Reproduced from @k2vae2025.](../thesis-figures/K2VAE_arch.png){#fig-k2vae-pipeline}
+![The K$^2$VAE architecture pipeline. Reproduced from @k2vae2025.](../thesis-figures/K2VAE_arch.png){#fig-k2vae-pipeline}
 
+The full architecture is shown in @fig-k2vae-pipeline. The input time series $X$ is patched and embedded into $X^{P'}$, then mapped by KoopmanNet's measurement function $\psi$ into the latent observable space $X^{P*}$. A combined Koopman operator $\mathcal{K}$, formed from a local, eDMD-derived component $\mathcal{K}_{loc}$ and a learnable global component $\mathcal{K}_{glo}$, is applied iteratively to reconstruct the context $\hat{X}^C$ and to roll the forecast forward. The reconstruction residual $X^{Res} = X^{P*} - \hat{X}^C$ isolates the nonlinear dynamics that the linear operator could not capture, and is passed to the Integrator, which produces a control sequence $U$.
+
+KalmanNet then combines $U$ with the learned process model ($w_k \sim \mathcal{N}(0,Q)$) and observation model ($v_k \sim \mathcal{N}(0,R)$), iterating the predict-update recursion $k$ times to refine the latent mean $Z$ and covariance $P$ into $Z'$. This defines the approximate posterior $\mathbb{Q}(Z\mid X) = \mathcal{N}(Z', P)$, from which a latent code is drawn via the reparameterization trick, scaling a standard normal draw by the Cholesky factor $L$ of $P$ and resampling. The decoder $\psi^{-1}$ maps this sample to the final predictive distribution $\mathbb{P}(Y\mid Z)$.
 
 ### How the model acts as a VAE
 
@@ -426,13 +438,28 @@ A specific numerical adjustment is required during this standard deviation decod
 
 ## Results and Experiments
 
-We only ever use an input window of 96, every though we predict on 96, 192, 336 and 720. Is this something we should look into?
+In this section we will be discussing the datasets we have used, the hyper parameter tuning we have done, the other models we have benchmarked against and the results we have achieved. We will explain what our benchmark models are as well as why K$^2$VAE should out perform them. We will also conduct an ablation study on K$^2$VAE as well as a discussion on our results verses the original paper. An input window of 96 time steps has been used across all datasets and models.
 
 ### Libraries - Ask Jake
 
-### Preprocessing and data cleaning - Clarify with jake
+### Datasets and preparation - Clarify with jake
 
-Is this just explaining what the datasets are, where we got them? What they look like date - variables, we drop the dates to get into correct format. Then we discuss the dimensions of the preproccessing pipeline, maybe move its whole discussion here? 
+the datasets used in this work are summarised in @tbl-datasets. They are eached stored as a csv file with the first column holding the data and time and the rest are single columns for each variable. When reading in the datasets we drop the first column and feed the actual variables into the model maintaining the correct order. We have two types of datasets namely -L for large and -S for small. ETTh1 and Wind are our large datasets while Exchange and Congestion are our small datasets. We make use of YAML files to store dataset specific information inclduign hyper parameters, model conifgurations as well as dataset locations. The model reads the associated YAML and retrieves the relevant information for each dataset.
+
+| Horizon | Dataset | #var. | Range | Freq. | Timesteps | Description |
+|:--------|:--------|------:|:------|:------|----------:|:------------|
+| Long-term | ETTh1-L | 7 | $\mathbb{R}^+$ | Hourly | 17,420 | Electricity transformer temperature per hour |
+| Long-term | Wind-L | 7 | $\mathbb{R}$ | 15-min | 48,673 | Forecast and measured wind speed with weather covariates |
+| Short-term | Exchange-S | 8 | $\mathbb{R}^+$ | Daily | 7,588 | Daily exchange rates of 8 countries |
+| Short-term | Congestion-S | 3 | $\mathbb{R}^+$ | Hourly | 8,761 | Motorway traffic volume with weather covariates |
+
+: Statistical information of the datasets used in this work. {#tbl-datasets}
+
+We note that we obtained the ETTh1-L as well as Exchange-S from the original K$^2$VAE paper obtaining them from https://drive.google.com/drive/folders/1l0c4H57xYKKQQ5Tm7kd4C8M2nCepky-y. These datasets were cleaned by external sources and are common Probabilistic Time Series benchmark datasets. These datasets were indentified from the decisionintelligence K$^2$VAE git repository. We have not done any additional preprocessing on these datasets.
+
+Wind-L is another well know Probabilistic Time Series dataset that was already preprocessed. It was obtained from https://drive.google.com/file/d/1vgpOmAygokoUt235piWKUjfwao6KwLv7/view. We had to reshape this dataset as to match the wide format instead of the long format. AI was used to do this transformation. This dataset was identified from the decisionintelligence TFB git repository.
+
+Congestion was obtained from Kaggle via this link https://www.kaggle.com/datasets/anshtanwar/metro-interstate-traffic-volume/data?select=Metro_Interstate_Traffic_Volume.csv. This dataset was not fully preprocessed so we had to prepare it. First we removed all non-continuous features like holiday, weather_main and weather_description. This left us with temp, clouds_all and traffic_volume. We also notably dropped rain_1h and snow_1h as they were zero-valued for the entire selected window. Finally we truncated the dataset to the final contiguous period of 2017-09-30 to 2018-09-30 instead of using the entire 2012 to 2018 period. This resulted in a complete, gap-free hourly series with no duplicate or missing timestamps.
 
 ### Hyperparameter Tuning
 
@@ -468,8 +495,60 @@ The main advantage of Koopa is its combination of physical dynamical modeling wi
 
 We expect K$^2$VAE to outperform Koopa on noisy and highly nonlinear benchmarks. Rather than assuming that linear operators can fully resolve the dynamics across frequency bands, K$^2$VAE explicitly isolates the reconstruction error that the linear Koopman operator fails to capture. The Integrator processes this residual sequence through self-attention to generate a nonlinear control sequence, which KalmanNet then fuses with the linear trajectory. This predict-and-update recursion provides active noise filtering and state correction that Koopa lacks, resulting in better stability when predicting complex systems. However, calculating these residual sequences and recursive Kalman updates makes K$^2$VAE computationally more demanding to train than Koopa.
 
+### Metrics
+
+The metrics we use to evaluate our models in this paper are the Normalised Mean Absolute Error (NMAE) and the Continuous Ranked Probability Score (CRPS). Its important to note that in our codebase we did not select the oprimal model based off of these values but rather the lowest validation loss value. We calculated theses metrics across our model as well as the benchmark models. This was done over 4 different prediction horizons: 96, 192, 336 and 720.
+
+#### NMAE
+
+$$
+\text{NMAE} = \frac{\sum_{k=1}^{K} \sum_{t=1}^{T} \left| x_t^k - \hat{x}_t^k \right|}{\sum_{k=1}^{K} \sum_{t=1}^{T} \left| x_t^k \right|}
+$$ {#eq-nmae}
+
+$K$ indexes variables, $T$ indexes the horizon timesteps, $x_t^k$/$\hat{x}_t^k$ are the ground truth and prediction.
+
+This error metric measures the total size of the prediction errors normalised by the total magnitude of the true data values. This gives us a scale-free measure of point-forecast accuracy that can be compared across datasets with very different units and ranges. NMAE is bounded below at 0, which is only achieved when the forecast  predicted each value exactly. It has no fixed upper bound, since the numerator can grow arbitrarily large relative to the denominator. A useful reference point is NMAE $= 1$, the error obtained by trivially predicting zero for every timestep. A good score is therefore a value well below 1 and as close to 0 as possible, meaning the model comfortably outperforms this naive baseline.
+
+#### CRPS
+
+$$
+\text{CRPS} = \int_{\mathbb{R}} \left( F(z) - \mathbb{I}\{x \leq z\} \right)^2 dz
+$$ {#eq-crps}
+
+defined as the integrated squared difference between the predictive CDF $F$ and the indicator of the observation $x$.
+
+CRPS is bounded below at 0, which is only achieved when the predictive distribution collapses to a point mass exactly at the observed value. As with NMAE, it has no fixed upper bound, since it grows with the scale of both the forecast error and the spread of the predictive distribution. A good CRPS score is therefore a small value close to 0, indicating a predictive distribution that is both centred near the true value and appropriately confident. This process ensures that the output of the model is actually a good predicted distribution.
+
+Equation @eq-crps cannot be evaluated directly, since it requires the true predictive CDF $F$, which is not available in closed form for a generative model's conditional distribution $\mathbb{P}(Y|Z,X)$. The only way to interrogate this distribution is to draw samples from it, so $F$ must be replaced by an estimate built from a finite set of draws.
+
+In practice, we estimate this from $n = 100$ samples of the posterior predictive distribution using the following closed-form identity, which is exact for the CRPS of the resulting empirical distribution rather than an approximation of it:
+
+$$
+\text{CRPS}(\hat{F}, x) = \frac{1}{n}\sum_{i=1}^{n} \left| X_i - x \right| - \frac{1}{2n^2}\sum_{i=1}^{n}\sum_{j=1}^{n} \left| X_i - X_j \right|
+$$ {#eq-crps-empirical}
+
+#### Relevance to our project
+
+NMAE and CRPS evaluate complementary aspects of a probabilistic forecast. NMAE only assesses the accuracy of the point forecast, ignoring any measure of the predicted uncertainty entirely. CRPS extends this by scoring the whole predictive distribution, penalising a forecast that is either biased or poorly calibrated in its uncertainty. This distinction is particularly relevant to K$^2$VAE, since the KalmanNet is explicitly designed to model and refine process uncertainty rather than just the mean prediction. A model that achieves a low NMAE without producing well-calibrated confidence intervals would still score poorly on CRPS, so reporting both metrics lets us separate raw forecasting accuracy from the quality of the uncertainty estimates that motivate our architecture.
+
 ### Results
 
 ### Ablations
 
+| Model | Code repository |
+|:------|:-----------------|
+| Koopa | https://github.com/thuml/koopa |
+| PatchTST | https://github.com/yuqinie98/PatchTST |
+| K$^2$VAE (paper) | https://github.com/decisionintelligence/K2VAE |
+| K$^2$VAE (ours) | https://github.com/KaiVanNiekerk/Project |
+
+: Code repositories for the models used in this work. {#tbl-repos}
+
 ### Our paper vs The reference - Ask Jake
+
+- Want to mention our model validated on elbo nor crps
+- They calculate crps differently as they use PRobTS (metnion their eqn vs @eq-crps-empirical)
+- their latent dist disregards z' and centers around 0 rather.
+- We clamp ...
+- They used ProbTS
+- They had access to much more hp tuning etc etc.

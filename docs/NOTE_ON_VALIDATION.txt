@@ -30,3 +30,166 @@ The loss curve can still be useful for diagnosing training stability and calibra
 
 Conclusion:
 The current setup is internally consistent: the project is optimizing NLL while evaluating CRPS and NMAE as reporting metrics. The NLL-heavy curves are therefore expected behavior under the objective, rather than an obvious calculation error.
+
+[AMENDMENT] The "internally consistent" claim above holds WITHIN the K2VAE path but does NOT hold ACROSS models. See "Checkpoint selection is asymmetric" below.
+
+
+================================================================
+CHECKPOINT SELECTION IS ASYMMETRIC ACROSS MODELS
+================================================================
+
+K2VAE and the baselines do not select their best checkpoint on the same
+criterion:
+
+- K2VAE (src/train.py, _checkpoint_step called with val_metrics["total"]):
+  selects on the composite loss, NLL + beta*KL + lambda*Rec.
+- PatchTST / Koopa (baselines/baseline_trainer.py): _train_epoch and
+  _validate return {"total": avg_nll, "elbo": 0.0, "kl": 0.0, "rec": 0.0},
+  so "total" IS pure NLL. These select on forecast likelihood alone.
+
+We therefore pick the baselines' best forecasting checkpoint but K2VAE's
+best ELBO checkpoint, then compare all three on CRPS. The KL and
+reconstruction terms pull the K2VAE checkpoint away from the reported
+metric. This is not a shared handicap; it penalises only the model under
+test, which is exactly the kind of asymmetry that can flip a ranking.
+
+Supporting evidence: ETTh1-L at L=720 has best_epoch=2 (val composite loss
+never improved after epoch 2, early stop at epoch 7) and is also our worst
+result, CRPS 0.5384.
+
+Cheapest test: checkpoint K2VAE on val_metrics["nll"] instead of
+val_metrics["total"] and rerun ETTh1 L=720. One-line change, and it makes
+the comparison against our own baselines like-for-like for the first time.
+
+
+================================================================
+DATA SPLIT PROTOCOL: DIVERGENCE FROM ProbTS / THE K2VAE PAPER
+================================================================
+
+Summary:
+Our loader applies a single 70/15/15 chronological split to every dataset
+(CLI.load, train_frac=0.7, val_frac=0.15). The paper evaluates under ProbTS,
+which does NOT use one ratio. ProbTS branches by dataset type and none of
+its branches yield 70/15/15. Our numbers are therefore measured on different
+data segments than the published table, so direct comparison against the
+paper's figures is currently invalid.
+
+What ProbTS does (probts/data/data_utils/get_datasets.py, function
+get_dataset_borders):
+
+- ETTh1 / ETTh2: hardcoded month borders, the ratio arguments are ignored.
+      border_begin = [0, 12*30*24, 12*30*24 + 4*30*24]
+      border_end   = [12*30*24, 12*30*24 + 4*30*24, 12*30*24 + 8*30*24]
+  That is 12 months train / 4 validation / 4 test.
+
+- Other long-term datasets (Weather, Electricity, Traffic, Exchange-L):
+  ratio based, defaults train_ratio=0.7 and test_ratio=0.2, validation takes
+  the remainder. That is 70/10/20, not 70/15/15.
+
+- Short-term datasets (Exchange-S, Solar-S, ...): not ratio based at all.
+  See the Exchange-S section below.
+
+(ETTm borders were not investigated, ETTm is out of scope for this project.)
+
+Concrete consequence for ETTh1, 17,420 rows:
+
+    ProbTS   train[0,8640)   val[8640,11520)   test[11520,14400)
+    Ours     train[0,12194)  val[12194,14807)  test[14807,17420)
+
+- ProbTS discards the final 3,020 rows, 17.3% of the file, entirely.
+- Our test set begins 407 rows AFTER the ProbTS test set ends.
+- The two test sets have ZERO overlap.
+- Rows 11520-12194, which ProbTS holds out as test data, sit inside our
+  training set.
+
+We are scoring a different, later segment of a non-stationary series. This
+is the most likely explanation for ALL THREE of our models (K2VAE, PatchTST,
+Koopa) scoring worse than their published counterparts, since the offset
+applies symmetrically to models we did not write:
+
+    avg CRPS      ours     paper
+    ETTh1 K2VAE   0.4385   0.314
+    ETTh1 PatchTST 0.3923  0.323
+    ETTh1 Koopa   0.4025   0.318
+
+Important: this does NOT explain why K2VAE underperforms OUR OWN PatchTST
+and Koopa runs. Those share our loader exactly (baselines/run_baseline.py
+calls the same CLI.load), so the split hits all three identically. The
+internal ranking flip needs an asymmetric cause, which is the checkpoint
+selection criterion above and/or the Koopman spectral-norm clamp
+(max_operator_norm=1.0, applied ~34 times at L=720).
+
+Consistency check: on Wind-L, our own dataset with no published reference
+split, K2VAE wins on average (0.6057 vs PatchTST 0.6092, Koopa 0.6238).
+
+
+================================================================
+EXCHANGE-S: WRONG SOURCE FILE AND WRONG PROTOCOL
+================================================================
+
+Two independent problems.
+
+1. We are loading the wrong file.
+
+   Paper dataset table:  Exchange-S = 6,071 timesteps
+                         Exchange-L = 7,588 timesteps
+   Our datasets/exchange_rate/exchange_rate.csv = 7,588 rows (verified,
+   spanning 1990/1/1 to 2010/10/10), an exact match for Exchange-L.
+
+   Our Exchange-S config applies the Exchange-S protocol (T = L = 30) to the
+   Exchange-L data. We are comparing against the wrong column of the paper.
+
+2. Exchange-S in ProbTS never touches the ratio-based path.
+
+   Short-term datasets route to prepare_STSF_dataset, which calls GluonTS
+   datasets.get_dataset("exchange_rate_nips") and uses the split baked into
+   that archive.
+
+   GluonTS exchange_rate_nips (_gp_copula_2019.py):
+       prediction_length = 30, freq = "B", num_series = 8,
+       rolling_evaluations = 5
+
+   The test portion is 5 rolling windows of 30 steps appended to the end of
+   the train series. ProbTS then carves validation out of the train series
+   (split_train_val in data_utils.py):
+       offset = num_test_windows * prediction_length
+       trunc_train_len = train_len - offset
+   which removes a further 5 * 30 = 150 steps.
+
+   Taking the paper's 6,071 total, the implied structure is approximately:
+
+       train   steps 0-5771      (~95%)
+       val     steps 5771-5921   (150 steps, 5 windows of 30)
+       test    steps 5921-6071   (150 steps, 5 windows of 30)
+
+   The absolute train length is inferred from the paper's 6,071 figure; the
+   structure itself comes directly from the ProbTS and GluonTS source.
+
+   This is structurally unlike any ratio split. Evaluation is over 5 fixed
+   rolling windows of 30 steps, not the ~1,100 stride-1 sliding windows our
+   loader produces.
+
+Conclusion: our Exchange-S results are not comparable to the paper's
+Exchange-S column on two independent grounds, wrong source file and a
+different evaluation protocol.
+
+
+================================================================
+OPTIONS, IN ORDER OF EFFORT
+================================================================
+
+1. Re-scope the claim. State in the thesis that our splits are a deliberate,
+   internally consistent protocol applied uniformly to all models, and
+   compare only against OUR OWN baseline runs rather than the paper's
+   published table. Cheapest and fully defensible.
+2. Fix checkpoint selection (one line) so K2VAE and the baselines are
+   selected on the same criterion. Do this regardless of option 1, it is a
+   fairness bug in our own internal comparison.
+3. Match ProbTS for ETTh1: add the month-border branch to CLI.load and
+   rerun. This legitimises the single most-cited comparison. Note the
+   standard loaders start val/test windows at (border - seq_len) so the
+   first window has full context; match that too.
+4. Switch Weather to 70/10/20, a one-line change.
+5. Exchange-S: either drop it, or obtain the real exchange_rate_nips archive
+   and adopt the rolling-window protocol. Do not compare the current run
+   against the paper's Exchange-S column.
