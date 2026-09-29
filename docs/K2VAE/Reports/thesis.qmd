@@ -426,6 +426,8 @@ A specific numerical adjustment is required during this standard deviation decod
 
 ## Results and Experiments
 
+We only ever use an input window of 96, every though we predict on 96, 192, 336 and 720. Is this something we should look into?
+
 ### Libraries - Ask Jake
 
 ### Preprocessing and data cleaning - Clarify with jake
