@@ -310,6 +310,8 @@ This data will then be treated as the input data into KoopmanNet.
 
 ### Model pipeline 
 
+-- FLAG --- could also add soemthing more similar to the slides and explain more intitively usign those kind of diagrams ...
+
 We first split our time series into 70% training data, 15% validation data and 15% test data.
 
 ![The K$^2$VAE architecture pipeline. Reproduced from @k2vae2025.](../thesis-figures/K2VAE_arch.png){#fig-k2vae-pipeline}
@@ -438,7 +440,7 @@ A specific numerical adjustment is required during this standard deviation decod
 
 ## Results and Experiments
 
-In this section we will be discussing the datasets we have used, the hyper parameter tuning we have done, the other models we have benchmarked against and the results we have achieved. We will explain what our benchmark models are as well as why K$^2$VAE should out perform them. We will also conduct an ablation study on K$^2$VAE as well as a discussion on our results verses the original paper. An input window of 96 time steps has been used across all datasets and models.
+In this section we will be discussing the datasets we have used, the hyper parameter tuning we have done, the other models we have benchmarked against and the results we have achieved. We will explain what our benchmark models are as well as why K$^2$VAE should out perform them. We will also conduct an ablation study on K$^2$VAE as well as a discussion on our results verses the original paper. An input window of 96 time steps has been used across all large datasets and models. While a input window of 30 has been used across the smaller datasets.
 
 ### Libraries - Ask Jake
 
