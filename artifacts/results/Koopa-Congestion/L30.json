@@ -1,0 +1,18 @@
+{
+  "model": "koopa",
+  "dataset": "Congestion",
+  "input_window": 30,
+  "horizon": 30,
+  "max_epochs": 100,
+  "nmae": 0.17985416948795319,
+  "crps": 0.3676909860223532,
+  "test_losses": {
+    "total": 0.793679428845644,
+    "nll": 0.793679428845644,
+    "crps": 0.3676909860223532,
+    "elbo": 0.0,
+    "kl": 0.0,
+    "rec": 0.0
+  },
+  "best_epoch": 25
+}
