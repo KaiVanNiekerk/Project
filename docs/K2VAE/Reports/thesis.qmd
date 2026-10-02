@@ -511,7 +511,7 @@ $$ {#eq-nmae}
 
 $K$ indexes variables, $T$ indexes the horizon timesteps, $x_t^k$/$\hat{x}_t^k$ are the ground truth and prediction.
 
-This error metric measures the total size of the prediction errors normalised by the total magnitude of the true data values. This gives us a scale-free measure of point-forecast accuracy that can be compared across datasets with very different units and ranges. NMAE is bounded below at 0, which is only achieved when the forecast  predicted each value exactly. It has no fixed upper bound, since the numerator can grow arbitrarily large relative to the denominator. A useful reference point is NMAE $= 1$, the error obtained by trivially predicting zero for every timestep. A good score is therefore a value well below 1 and as close to 0 as possible, meaning the model comfortably outperforms this naive baseline.
+This error metric measures the total size of the prediction errors normalised by the total magnitude of the true data values. This gives us a scale-free measure of point-forecast accuracy that can be compared across datasets with very different units and ranges. NMAE is bounded below at 0, which is only achieved when the forecast predicted each value exactly. It has no fixed upper bound, since the numerator can grow arbitrarily large relative to the denominator. A useful reference point is NMAE $= 1$, the error obtained by trivially predicting zero for every timestep. A good score is therefore a value well below 1 and as close to 0 as possible, meaning the model comfortably outperforms this naive baseline.
 
 #### CRPS
 
@@ -533,7 +533,7 @@ $$ {#eq-crps-empirical}
 
 #### Relevance to our project
 
-NMAE and CRPS evaluate complementary aspects of a probabilistic forecast. NMAE only assesses the accuracy of the point forecast, ignoring any measure of the predicted uncertainty entirely. CRPS extends this by scoring the whole predictive distribution, penalising a forecast that is either biased or poorly calibrated in its uncertainty. This distinction is particularly relevant to K$^2$VAE, since the KalmanNet is explicitly designed to model and refine process uncertainty rather than just the mean prediction. A model that achieves a low NMAE without producing well-calibrated confidence intervals would still score poorly on CRPS, so reporting both metrics lets us separate raw forecasting accuracy from the quality of the uncertainty estimates that motivate our architecture.
+NMAE and CRPS evaluate complementary aspects of a probabilistic forecast. NMAE only assesses the accuracy of the point forecast, ignoring any measure of the predicted uncertainty entirely. CRPS scores the whole predictive distribution, penalising a forecast that is either biased or poorly calibrated in its uncertainty. This distinction is particularly relevant to K$^2$VAE, since the KalmanNet is designed to model and refine process uncertainty rather than just the mean prediction. In a very basic sense NMAE asseses our actual prediction and CRPS measures the uncertainity. The reason we need both is a can achieve a low NMAE without producing well-calibrated confidence intervals. Thus it would still score poorly on CRPS, so reporting both metrics lets us separate raw forecasting accuracy from the quality of the uncertainty. 
 
 ### Results
 
@@ -695,3 +695,4 @@ The mixed Koopman configuration remains a defensible control. Dynamic Koopman is
 - We clamp ...
 - They used ProbTS
 - They had access to much more hp tuning etc etc.
+- Different training / test / val split. 
