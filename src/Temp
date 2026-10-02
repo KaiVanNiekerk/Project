@@ -1,0 +1,19 @@
+# -L sweeps, all four horizons
+$env:HORIZONS = "all"
+foreach ($m in "patchtst","koopa") {
+  foreach ($d in "ETTh1-L","Wind-L") {
+    $env:BASELINE_MODEL = $m
+    $env:DATASET_CONFIG = "configs/datasets_yaml/$d.yaml"
+    python baselines/run_baseline.py
+  }
+}
+
+# -S runs at the yaml's 30 steps
+Remove-Item Env:\HORIZONS
+foreach ($m in "patchtst","koopa") {
+  foreach ($d in "Exchange-S","Congestion") {
+    $env:BASELINE_MODEL = $m
+    $env:DATASET_CONFIG = "configs/datasets_yaml/$d.yaml"
+    python baselines/run_baseline.py
+  }
+}

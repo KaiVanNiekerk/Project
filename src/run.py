@@ -13,15 +13,18 @@ from plot_data import PlotDataCollector
 from plotting import PlotManager
 
 
-# Long-term forecasting horizons used in the paper's tables.
-DEFAULT_HORIZONS = [96, 192, 336, 720]
+def main():
+    # Environment overrides keep dataset and smoke-test selection outside the
+    # source file, making repeated experiments easier to launch.
+    DATASET_CONFIG_PATH = Path(
+        os.environ.get("DATASET_CONFIG", "configs/datasets_yaml/Wind-L.yaml")
+    )
+    with DATASET_CONFIG_PATH.open("r", encoding="utf-8") as f:
+        cfg = yaml.safe_load(f)
 
-
-def run_horizon(cfg: dict, DATASET_CONFIG_PATH: Path, L: int) -> dict:
-    """Train/evaluate one forecast horizon L and return its test metrics."""
     CSV_PATH = cfg["csv_path"]
     DATASET_NAME = cfg["dataset_name"]
-    T, patch_size = cfg["input_window"], cfg["patch_size"]
+    T, L, patch_size = cfg["input_window"], cfg["horizon_window"], cfg["patch_size"]
     tag = f"L{L}"
 
     hp = cfg["hyperparameters"]
@@ -39,6 +42,9 @@ def run_horizon(cfg: dict, DATASET_CONFIG_PATH: Path, L: int) -> dict:
     DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
     GENERATE_PLOTS = True  # flip off for quick smoke tests
     LOG_TO_WANDB = False  # flip on for hyperparameter tuning runs (e.g., wandb sweeps)
+
+    print(f"\n===== {DATASET_NAME} | horizon L={L} =====")
+
     # ---- data ----
     cli = CLI(datasets_dir="datasets")
     train_loader, val_loader, test_loader, n, m, scaler = cli.load(
@@ -141,34 +147,6 @@ def run_horizon(cfg: dict, DATASET_CONFIG_PATH: Path, L: int) -> dict:
         residuals = PlotDataCollector.compute_horizon_residuals(forecast_batch)
         residual_fig = plot_manager.plot_residual_by_horizon(residuals)
         plot_manager.save(residual_fig, f"residual_by_horizon_{tag}")
-    return metrics
-
-
-def main():
-    # Environment overrides keep dataset and smoke-test selection outside the
-    # source file, making repeated experiments easier to launch.
-    DATASET_CONFIG_PATH = Path(
-        os.environ.get("DATASET_CONFIG", "configs/datasets_yaml/Wind-L.yaml")
-    )
-    with DATASET_CONFIG_PATH.open("r", encoding="utf-8") as f:
-        cfg = yaml.safe_load(f)
-
-    # HORIZONS="96,192" restricts the sweep, e.g. for smoke tests.
-    horizons = [
-        int(h) for h in os.environ.get("HORIZONS", "").split(",") if h.strip()
-    ] or DEFAULT_HORIZONS
-
-    all_metrics = []
-    for L in horizons:
-        print(f"\n===== {cfg['dataset_name']} | horizon L={L} =====")
-        all_metrics.append(run_horizon(cfg, DATASET_CONFIG_PATH, L))
-
-    print("\nHorizon | NMAE | CRPS")
-    for m in all_metrics:
-        print(f"{m['horizon']:>7} | {m['nmae']:.4f} | {m['crps']:.4f}")
-    summary_dir = Path("artifacts/results") / cfg["dataset_name"]
-    with (summary_dir / "summary.json").open("w", encoding="utf-8") as f:
-        json.dump(all_metrics, f, indent=2)
 
 
 if __name__ == "__main__":

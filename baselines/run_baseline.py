@@ -26,9 +26,24 @@ from plotting import EpochHistory, PlotManager
 DEFAULT_HORIZONS = [96, 192, 336, 720]
 
 
+def resolve_horizons(config: dict) -> list[int]:
+    """Pick which horizons to run from the HORIZONS environment variable.
+
+    unset       -> [config["horizon_window"]], e.g. the 30-step -S runs.
+    "all"       -> the four long-term horizons from the paper's tables.
+    "96,192"    -> exactly those, e.g. for smoke tests.
+    """
+    raw = os.environ.get("HORIZONS", "").strip()
+    if not raw:
+        return [config["horizon_window"]]
+    if raw.lower() in ("all", "default"):
+        return list(DEFAULT_HORIZONS)
+    return [int(h) for h in raw.split(",") if h.strip()]
+
+
 def run_horizon(model_name: str, config_path: Path, config: dict, target_window: int) -> dict:
     """Train one isolated baseline at one horizon using the shared CLI splits and plot contract."""
-    max_epochs = int(os.environ.get("MAX_EPOCHS", "10"))
+    max_epochs = int(os.environ.get("MAX_EPOCHS", "100"))
     batch_size = int(os.environ.get("BATCH_SIZE", "32"))
     use_wandb = os.environ.get("USE_WANDB", "false").lower() in ("true", "1", "yes")
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -114,6 +129,7 @@ def run_horizon(model_name: str, config_path: Path, config: dict, target_window:
         "dataset": config["dataset_name"],
         "input_window": context_window,
         "horizon": target_window,
+        "max_epochs": max_epochs,
         "nmae": float(original_nmae),
         "crps": float(evaluation["losses"]["crps"]),
         "test_losses": {k: float(v) for k, v in evaluation["losses"].items()},
@@ -169,22 +185,21 @@ def main() -> None:
     with config_path.open("r", encoding="utf-8") as handle:
         config = yaml.safe_load(handle)
 
-    # HORIZONS="96,192" restricts the sweep, e.g. for smoke tests.
-    horizons = [
-        int(h) for h in os.environ.get("HORIZONS", "").split(",") if h.strip()
-    ] or DEFAULT_HORIZONS
+    horizons = resolve_horizons(config)
 
     all_metrics = []
     for horizon in horizons:
         print(f"\n===== {model_name} | {config['dataset_name']} | horizon L={horizon} =====")
         all_metrics.append(run_horizon(model_name, config_path, config, horizon))
 
-    print("\nHorizon | NMAE | CRPS")
-    for m in all_metrics:
-        print(f"{m['horizon']:>7} | {m['nmae']:.4f} | {m['crps']:.4f}")
-    summary_dir = Path("artifacts/results") / f"{model_name.title()}-{config['dataset_name']}"
-    with (summary_dir / "summary.json").open("w", encoding="utf-8") as handle:
-        json.dump(all_metrics, handle, indent=2)
+    # Only a sweep gets the comparison table and the combined summary file.
+    if len(all_metrics) > 1:
+        print("\nHorizon | NMAE | CRPS")
+        for m in all_metrics:
+            print(f"{m['horizon']:>7} | {m['nmae']:.4f} | {m['crps']:.4f}")
+        summary_dir = Path("artifacts/results") / f"{model_name.title()}-{config['dataset_name']}"
+        with (summary_dir / "summary.json").open("w", encoding="utf-8") as handle:
+            json.dump(all_metrics, handle, indent=2)
 
 
 if __name__ == "__main__":

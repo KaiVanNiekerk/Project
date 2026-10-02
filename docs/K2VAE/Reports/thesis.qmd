@@ -537,8 +537,6 @@ NMAE and CRPS evaluate complementary aspects of a probabilistic forecast. NMAE o
 
 ### Results
 
-### Ablations
-
 | Model | Code repository |
 |:------|:-----------------|
 | Koopa | https://github.com/thuml/koopa |
@@ -547,6 +545,16 @@ NMAE and CRPS evaluate complementary aspects of a probabilistic forecast. NMAE o
 | K$^2$VAE (ours) | https://github.com/KaiVanNiekerk/Project |
 
 : Code repositories for the models used in this work. {#tbl-repos}
+
+### Our paper vs The reference
+
+- Want to mention our model validated on elbo nor crps
+- They calculate crps differently as they use PRobTS (metnion their eqn vs @eq-crps-empirical)
+- their latent dist disregards z' and centers around 0 rather.
+- We clamp ...
+- They used ProbTS
+- They had access to much more hp tuning etc etc.
+- Different training / test / val split. 
 
 ## Ablation Analysis
 
@@ -687,12 +695,3 @@ The ETTh1-L ablations support retaining RevIN, a moderate nonzero KL weight, and
 
 The mixed Koopman configuration remains a defensible control. Dynamic Koopman is marginally better on this seed, but the difference is too small to justify replacing the mixed configuration without repeated-seed evidence. The preferred current setup is therefore the mixed Koopman model with RevIN enabled, $\beta=0.01$, and $\lambda_{rec}=0.5$.
 
-### Our paper vs The reference - Ask Jake
-
-- Want to mention our model validated on elbo nor crps
-- They calculate crps differently as they use PRobTS (metnion their eqn vs @eq-crps-empirical)
-- their latent dist disregards z' and centers around 0 rather.
-- We clamp ...
-- They used ProbTS
-- They had access to much more hp tuning etc etc.
-- Different training / test / val split. 
