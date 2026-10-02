@@ -1,19 +1,19 @@
 dataset_name: Congestion
 csv_path: Congestion/congestion.csv
 num_features: 3
-patch_size: 24
-input_window: 96
-horizon_window: 96
+patch_size: 10
+input_window: 30
+horizon_window: 30
 feature_names: ['traffic_volume', 'temp', 'clouds_all']
 hyperparameters:
   lr: 0.001
-  d: 128
+  d: 32
   lambda_rec: 0.5
   hidden_dim: 256
   hidden_layers: 1
-  kl_weight: 0.1
+  kl_weight: 0.0001
   integrator:
-    d_model: 128
+    d_model: 32
     n_heads: 4
     d_ff: 256
     n_layers: 1
