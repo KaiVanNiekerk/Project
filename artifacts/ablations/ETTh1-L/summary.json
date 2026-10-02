@@ -1,0 +1,170 @@
+[
+  {
+    "dataset": "ETTh1-L",
+    "ablation": "beta-yaml-lambda-yaml",
+    "seed": 2026,
+    "koopman_mode": "mixed",
+    "use_revin": true,
+    "beta": 0.01,
+    "lambda_rec": 0.5,
+    "best_epoch": 8,
+    "best_val_total": 1.0179178150076615,
+    "test_losses": {
+      "total": 1.1749529854247445,
+      "elbo": 1.029294908830994,
+      "nll": 0.9422220446561512,
+      "kl": 8.707286828442625,
+      "rec": 0.2913161565206553,
+      "crps": 0.37874403752778707
+    },
+    "test_nmae_original": 0.37686264514923096,
+    "skipped_batches": 0
+  },
+  {
+    "dataset": "ETTh1-L",
+    "ablation": "koopman-static",
+    "seed": 2026,
+    "koopman_mode": "static",
+    "use_revin": true,
+    "beta": 0.01,
+    "lambda_rec": 0.5,
+    "best_epoch": 11,
+    "best_val_total": 1.047396088901319,
+    "test_losses": {
+      "total": 1.1590657940036373,
+      "elbo": 1.0249548617162203,
+      "nll": 0.9437944136167827,
+      "kl": 8.116044590347691,
+      "rec": 0.26822186555517347,
+      "crps": 0.37924212805534663
+    },
+    "test_nmae_original": 0.3791196346282959,
+    "skipped_batches": 0
+  },
+  {
+    "dataset": "ETTh1-L",
+    "ablation": "koopman-dynamic",
+    "seed": 2026,
+    "koopman_mode": "dynamic",
+    "use_revin": true,
+    "beta": 0.01,
+    "lambda_rec": 0.5,
+    "best_epoch": 7,
+    "best_val_total": 1.1574430434327376,
+    "test_losses": {
+      "total": 1.260945855786926,
+      "elbo": 0.997828838072325,
+      "nll": 0.9245130286404961,
+      "kl": 7.3315813227703694,
+      "rec": 0.5262340338606584,
+      "crps": 0.37654339522123337
+    },
+    "test_nmae_original": 0.3765217661857605,
+    "skipped_batches": 0
+  },
+  {
+    "dataset": "ETTh1-L",
+    "ablation": "beta-0-lambda-yaml",
+    "seed": 2026,
+    "koopman_mode": "mixed",
+    "use_revin": true,
+    "beta": 0.0,
+    "lambda_rec": 0.5,
+    "best_epoch": 8,
+    "best_val_total": 0.9893752305131209,
+    "test_losses": {
+      "total": 1.141531163140347,
+      "elbo": 0.9760167512454485,
+      "nll": 0.9760167512454485,
+      "kl": 1198.8753895006682,
+      "rec": 0.3310288214369824,
+      "crps": 0.38023460656404495
+    },
+    "test_nmae_original": 0.38712838292121887,
+    "skipped_batches": 0
+  },
+  {
+    "dataset": "ETTh1-L",
+    "ablation": "beta-1-lambda-1",
+    "seed": 2026,
+    "koopman_mode": "mixed",
+    "use_revin": true,
+    "beta": 1.0,
+    "lambda_rec": 1.0,
+    "best_epoch": 28,
+    "best_val_total": 1.28933248394414,
+    "test_losses": {
+      "total": 1.5004972125354565,
+      "elbo": 1.2605611603511007,
+      "nll": 1.252477681950519,
+      "kl": 0.008083475459563104,
+      "rec": 0.23993605081188052,
+      "crps": 0.5133996664693481
+    },
+    "test_nmae_original": 0.5690774917602539,
+    "skipped_batches": 0
+  },
+  {
+    "dataset": "ETTh1-L",
+    "ablation": "beta-yaml-lambda-0",
+    "seed": 2026,
+    "koopman_mode": "mixed",
+    "use_revin": true,
+    "beta": 0.01,
+    "lambda_rec": 0.0,
+    "best_epoch": 17,
+    "best_val_total": 0.8513286270593342,
+    "test_losses": {
+      "total": 1.0251943139653457,
+      "elbo": 1.0251943139653457,
+      "nll": 0.973593093062702,
+      "kl": 5.160122250255785,
+      "rec": 1.1172659287327213,
+      "crps": 0.39132951043154063
+    },
+    "test_nmae_original": 0.39537152647972107,
+    "skipped_batches": 0
+  },
+  {
+    "dataset": "ETTh1-L",
+    "ablation": "beta-0-lambda-0",
+    "seed": 2026,
+    "koopman_mode": "mixed",
+    "use_revin": true,
+    "beta": 0.0,
+    "lambda_rec": 0.0,
+    "best_epoch": 10,
+    "best_val_total": 0.8487626753355327,
+    "test_losses": {
+      "total": 1.0137119332426472,
+      "elbo": 1.0137119332426472,
+      "nll": 1.0137119332426472,
+      "kl": 19214.784957082647,
+      "rec": 0.960163917980696,
+      "crps": 0.4060630821867993
+    },
+    "test_nmae_original": 0.409687876701355,
+    "skipped_batches": 0
+  },
+  {
+    "dataset": "ETTh1-L",
+    "ablation": "no-revin",
+    "seed": 2026,
+    "koopman_mode": "mixed",
+    "use_revin": false,
+    "beta": 0.01,
+    "lambda_rec": 0.5,
+    "best_epoch": 2,
+    "best_val_total": 1.5705617446648448,
+    "test_losses": {
+      "total": 1.490924237590087,
+      "elbo": 1.2616130725333565,
+      "nll": 1.1361877228084363,
+      "kl": 12.542534639960842,
+      "rec": 0.4586223295252574,
+      "crps": 0.4233556472157177
+    },
+    "test_nmae_original": 0.4156047999858856,
+    "skipped_batches": 0
+  }
+]

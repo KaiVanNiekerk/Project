@@ -7,6 +7,8 @@ format:
     documentclass: book
     classoption: oneside
     fontsize: 11pt
+    fig-pos: "H"
+    tbl-pos: "H"
     geometry:
       - margin=1in
     include-in-header:
@@ -545,6 +547,145 @@ NMAE and CRPS evaluate complementary aspects of a probabilistic forecast. NMAE o
 | K$^2$VAE (ours) | https://github.com/KaiVanNiekerk/Project |
 
 : Code repositories for the models used in this work. {#tbl-repos}
+
+## Ablation Analysis
+
+The purpose of this experiment is to examine the contribution of the main design choices in the K²VAE architecture. The ablations were carried out on the ETTh1-L configuration, using the same chronological data split, preprocessing pipeline, model dimensions, optimizer, random seed, early-stopping policy, and evaluation procedure throughout. The comparison therefore focuses on the effect of changing one architectural or objective component at a time, rather than on differences caused by the surrounding experimental setup.
+
+The principal forecasting measures used in this analysis are the Continuous Ranked Probability Score (CRPS) and the original-scale Normalized Mean Absolute Error (NMAE). Both are error measures, so lower values indicate better forecasts. NLL, KL divergence, reconstruction loss, and total loss are also reported where they are useful for understanding how a particular ablation changes the internal objective.
+
+The current ETTh1-L configuration uses $\beta=0.01$ and $\lambda_{rec}=0.5$. These values are referred to as the YAML values below. Setting a coefficient to zero removes its corresponding objective term, while setting it to one applies that term without the configured down-weighting.
+
+### Experimental Design
+
+| Condition | Koopman mode | RevIN | $\beta$ | $\lambda_{rec}$ | Purpose |
+|:--|:--|:--:|--:|--:|:--|
+| Control | Mixed | Enabled | YAML = 0.01 | YAML = 0.5 | Reference configuration |
+| Static Koopman | Local operator only | Enabled | 0.01 | 0.5 | Remove the global operator |
+| Dynamic Koopman | Global operator only | Enabled | 0.01 | 0.5 | Remove the local DMD operator |
+| No KL | Mixed | Enabled | 0 | 0.5 | Remove latent-prior regularization |
+| Full KL | Mixed | Enabled | 1 | 1 | Apply KL and reconstruction without down-weighting |
+| No reconstruction | Mixed | Enabled | 0.01 | 0 | Remove context reconstruction |
+| NLL-only | Mixed | Enabled | 0 | 0 | Remove both auxiliary objectives |
+| No RevIN | Mixed | Disabled | 0.01 | 0.5 | Remove instance normalization |
+
+: Configuration of the ETTh1-L ablation experiments. {#tbl-ablation-design}
+
+@tbl-ablation-design presents the ordinary K²VAE configuration alongside the isolated component changes. The control condition uses the mixed Koopman operator, RevIN, and the values specified in the dataset configuration. The static Koopman condition retains only the locally fitted operator, while the dynamic condition retains only the global operator. The remaining experiments examine the KL weight, the reconstruction weight, the joint removal of both auxiliary terms, and the removal of RevIN.
+
+The experiments follow a one-factor-at-a-time design with one targeted cross-effect. The Full KL condition ($\beta=1.0$, $\lambda_{rec}=1.0$) represents the canonical unweighted ELBO—where all terms have unit weight as in standard VAE theory—rather than an isolated $\beta$ ablation. The NLL-only condition is included because it shows what happens when both auxiliary objective terms are removed. A complete factorial grid was not used, since it would introduce many repeated combinations and make the effect of individual components more difficult to interpret.
+
+### Forecasting Results
+
+| Condition | CRPS | Difference from control | Original-scale NMAE | Difference from control |
+|:--|--:|--:|--:|--:|
+| Control | 0.3787 | -- | 0.3769 | -- |
+| Static Koopman | 0.3792 | +0.0005 | 0.3791 | +0.0023 |
+| Dynamic Koopman | 0.3765 | -0.0022 | 0.3765 | -0.0003 |
+| No KL ($\beta=0$) | 0.3802 | +0.0015 | 0.3871 | +0.0103 |
+| Full KL ($\beta=1$, $\lambda_{rec}=1$) | 0.5134 | +0.1347 | 0.5691 | +0.1922 |
+| No reconstruction ($\lambda_{rec}=0$) | 0.3913 | +0.0126 | 0.3954 | +0.0185 |
+| NLL-only ($\beta=0$, $\lambda_{rec}=0$) | 0.4061 | +0.0273 | 0.4097 | +0.0328 |
+| No RevIN | 0.4234 | +0.0446 | 0.4156 | +0.0387 |
+
+: Primary ETTh1-L forecasting results compared with the control. {#tbl-primary-results}
+
+@tbl-primary-results reports CRPS and original-scale NMAE for every condition alongside its difference from the control. Since both metrics are minimized, positive differences indicate worse forecasting performance.
+
+The dynamic Koopman condition gives the lowest CRPS and NMAE, but the improvement over the control is very small. Its CRPS decreases by only `0.0022`, while its NMAE decreases by `0.0003`. In contrast, removing RevIN, removing the reconstruction term, and applying the full KL weight all produce larger deteriorations. The most substantial change is produced by the full-KL condition, whose CRPS and NMAE are both markedly worse than those of the control.
+
+| Condition | Test total | Test NLL | Raw KL | $\beta KL$ | Recon | CRPS | Orig NMAE | Best ep |
+|:--|--:|--:|--:|--:|--:|--:|--:|--:|
+| Control | 1.1750 | 0.9422 | 8.7 | 0.0871 | 0.2913 | 0.3787 | 0.3769 | 8 |
+| Static Koopman | 1.1591 | 0.9438 | 8.1 | 0.0812 | 0.2682 | 0.3792 | 0.3791 | 11 |
+| Dynamic Koopman | 1.2609 | 0.9245 | 7.3 | 0.0733 | 0.5262 | 0.3765 | 0.3765 | 7 |
+| No KL | 1.1415 | 0.9760 | 1198.9 | 0.0000 | 0.3310 | 0.3802 | 0.3871 | 8 |
+| Full KL | 1.5005 | 1.2525 | 0.0 | 0.0081 | 0.2399 | 0.5134 | 0.5691 | 28 |
+| No reconstruction | 1.0252 | 0.9736 | 5.2 | 0.0516 | 1.1173 | 0.3913 | 0.3954 | 17 |
+| NLL-only | 1.0137 | 1.0137 | 19214.8 | 0.0000 | 0.9602 | 0.4061 | 0.4097 | 10 |
+| No RevIN | 1.4909 | 1.1362 | 12.5 | 0.1254 | 0.4586 | 0.4234 | 0.4156 | 2 |
+
+: Complete ETTh1-L ablation metrics. {#tbl-overall-results}
+
+@tbl-overall-results includes the secondary metrics needed to understand why the primary forecasting results differ. The reported KL value is the raw divergence before multiplication by $\beta$, while the weighted contribution is the quantity that enters the optimized objective.
+
+The total objective should not be used as the sole ranking criterion across these conditions. When $\beta$ or $\lambda_{rec}$ is set to zero, the model is optimizing a different objective, and the resulting total is no longer directly comparable to the control total. The primary forecasting metrics therefore provide the main basis for comparison, while the secondary terms explain the internal behavior of each model.
+
+### Koopman Operator Ablations
+
+![Training and validation objective components for the control K²VAE configuration on ETTh1-L.](../../../artifacts/plots/ablations/ETTh1-L/beta-yaml-lambda-yaml/loss_curves_1.png){#fig-control-components fig-cap="Training and validation objective components for the control K²VAE configuration on ETTh1-L." width=85%}
+
+@fig-control-components shows the training and validation objective components for the control condition. The model improves its predictive and reconstruction terms during training, while the KL term remains finite and contributes only through the configured weight.
+
+The NLL curve is not expected to be perfectly smooth. Each training point is an epoch average over stochastic latent samples, changing minibatches, dropout, and a local Koopman operator fitted separately for each batch. These sources of variation can produce short-term increases even when the broader trend is downward. The validation curve is smoother because the model is evaluated without parameter updates, but it can still move upward when the model begins to fit the training windows more closely than the validation windows.
+
+The static and dynamic operator conditions remain close to the control in the primary metrics. The static condition has a slightly higher CRPS and NMAE, while the dynamic condition has a slightly lower value for both. The dynamic condition also has a lower NLL, but its reconstruction loss is higher than that of the control. This suggests that the small improvement in forecast metrics is accompanied by a different trade-off between context reconstruction and horizon prediction, rather than a uniformly better latent representation.
+
+These differences are small relative to the uncertainty expected from a single random seed. The results therefore support retaining the mixed operator as the general-purpose configuration, while treating the dynamic result as a possible direction for future multi-seed investigation rather than as a definitive replacement.
+
+### KL Weighting and Latent Divergence
+
+The effect of removing and strengthening KL regularization is quantified in @tbl-overall-results. When $\beta=0$, the KL term contributes nothing to the optimized objective, and the raw KL increases to approximately `1198.9`. The NLL-only condition produces an even larger raw KL of approximately `19214.8` because both the KL and reconstruction constraints have been removed.
+
+This behavior is latent divergence. The posterior is no longer being encouraged to remain close to the standard normal prior assumed by the variational formulation. Although the runs remain finite and do not produce NaNs, the large KL values show that the learned latent distribution is moving far from the intended prior. This matters because the latent dynamics are no longer being regularized in the way assumed by the model design.
+
+![Training and validation objective components for the full-KL condition on ETTh1-L.](../../../artifacts/plots/ablations/ETTh1-L/beta-1-lambda-1/loss_curves_1.png){#fig-full-kl-components fig-cap="Training and validation objective components for the full-KL condition on ETTh1-L." width=85%}
+
+@fig-full-kl-components provides a visual view of the full-KL training behavior and illustrates posterior collapse. The plot should be read as a competition between the likelihood and the prior-matching term. At the beginning of training, the latent posterior is not yet close to the standard normal prior, so the KL contribution is large. Because $\beta=1$, reducing this term is strongly rewarded by the objective. The model therefore aggressively moves the latent mean toward zero and the covariance toward the identity, causing the raw KL to plummet to approximately `0.0081`. 
+
+Once the latent posterior is forced this close to the standard normal prior, it loses the freedom to encode input-conditioned information. Consequently, the forecast NLL remains high, and the model produces a severely deteriorated CRPS of `0.5134` and an NMAE of `0.5691`. In this collapsed state, the latent representation carries little useful dynamic information about the input, proving that the full-strength KL constraint is far too severe for the K²VAE architecture. The results therefore support a moderate nonzero KL weight rather than either removing the term or applying it at full strength.
+
+### Reconstruction and RevIN Ablations
+
+Removing the reconstruction term increases CRPS from `0.3787` to `0.3913` and NMAE from `0.3769` to `0.3954`. The reconstruction loss is not itself a horizon forecasting metric, but it encourages the latent dynamics and decoder to retain information about the observed context. Its removal therefore weakens an auxiliary learning signal that appears to support forecast quality.
+
+The no-reconstruction model reports a higher reconstruction error because that term is no longer included in the training objective. This is expected: the error is still measured for diagnosis, but it no longer contributes a gradient. The result supports retaining the configured reconstruction term with $\lambda_{rec}=0.5$.
+
+![Forecast versus truth for the Control condition on ETTh1-L.](../../../artifacts/plots/ablations/ETTh1-L/beta-yaml-lambda-yaml/forecast_vs_truth.png){#fig-control-forecast fig-cap="Forecast versus truth for the Control condition on ETTh1-L." width=100%}
+
+![Forecast versus truth for the no-RevIN condition on ETTh1-L.](../../../artifacts/plots/ablations/ETTh1-L/no-revin/forecast_vs_truth.png){#fig-no-revin-forecast fig-cap="Forecast versus truth for the no-RevIN condition on ETTh1-L." width=100%}
+
+@fig-control-forecast and @fig-no-revin-forecast contrast the forecast behavior with and without RevIN. In the unnormalized condition, CRPS increases to `0.4234` and NMAE to `0.4156`, while NLL and KL also worsen. The visual degradation in the no-RevIN predictions demonstrates how instance-level normalization helps the model handle changing scale and local distribution across context windows before patching and latent evolution.
+
+Furthermore, as shown in @tbl-overall-results, the `No RevIN` condition triggered early stopping almost immediately, reaching its best validation epoch at Epoch 2. Without instance normalization, non-stationary distribution shifts across sequence windows cause the optimization landscape to degrade rapidly. This proves that RevIN is not merely a performance booster, but a prerequisite for stable multi-epoch training.
+
+RevIN should therefore remain part of the preferred configuration. This conclusion is stronger than the small difference between the Koopman modes, although it should still be confirmed over multiple seeds before being presented as a universal claim.
+
+### Additional Analysis of Training and Forecast Behaviour
+
+The aggregate metrics establish which configurations perform better, but they do not show how the errors develop across the forecast horizon or how the auxiliary objective terms behave during training. The following figures are therefore included as part of the ablation analysis to provide the additional evidence needed to interpret the metric differences.
+
+![Control residuals by forecast horizon on ETTh1-L.](../../../artifacts/plots/ablations/ETTh1-L/beta-yaml-lambda-yaml/residual_by_horizon.png){#fig-control-residuals fig-cap="Control residuals by forecast horizon on ETTh1-L." width=85%}
+
+@fig-control-residuals shows the expected increase in error as the forecast horizon extends. This occurs because each predicted step depends on the latent state produced by the preceding rollout, so small modelling errors accumulate as the horizon grows. The later forecast steps are therefore more sensitive to imperfect Koopman propagation and decoder uncertainty. This figure supports the use of CRPS and NMAE as aggregate measures, but it does not change the component-level conclusions drawn from the primary results.
+
+![Loss components for the no-KL condition on ETTh1-L.](../../../artifacts/plots/ablations/ETTh1-L/beta-0-lambda-yaml/loss_curves_1.png){#fig-no-kl-components fig-cap="Loss components for the no-KL condition on ETTh1-L." width=85%}
+
+@fig-no-kl-components shows that removing the KL penalty does not make the raw KL disappear. It only removes the KL contribution from the optimized total. The posterior is therefore free to diverge, which explains the large raw KL reported in @tbl-overall-results. The loss can still decrease because the optimizer is reducing NLL and reconstruction error while no longer paying for movement away from the prior.
+
+![Loss components for the NLL-only condition on ETTh1-L.](../../../artifacts/plots/ablations/ETTh1-L/beta-0-lambda-0/loss_curves_1.png){#fig-nll-only-components fig-cap="Loss components for the NLL-only condition on ETTh1-L." width=85%}
+
+@fig-nll-only-components provides the corresponding diagnostic for the NLL-only condition. The absence of both auxiliary terms allows the latent representation to move far from the prior while the optimizer focuses on the likelihood. This is why the NLL-only run has the largest raw KL in the experiment. Its worse CRPS and NMAE show that removing the regularizers does not improve the probabilistic forecast, even though it removes terms from the scalar training objective.
+
+### Limitations
+
+The results use a single random seed, `2026`. They show the directional effects of the ablations but do not provide an estimate of variation across initializations. The most important follow-up would be to repeat the control, dynamic Koopman, no-KL, full-KL, and no-RevIN conditions across several seeds.
+
+The experiment also uses one dataset and one context-horizon setting, ETTh1-L. The conclusions may not transfer directly to short-horizon data or datasets with different sampling frequencies and scale characteristics.
+
+Early stopping is based on validation total loss rather than directly on CRPS or original-scale NMAE. Consequently, the best validation objective and the best forecasting metric do not necessarily occur at the same epoch. This is appropriate for the training objective, but it should be stated when interpreting the final test results.
+
+NLL, KL, reconstruction, and total loss are measured in the standardized objective space, whereas NMAE is reported in original data units. CRPS follows the evaluation tensors used by the current pipeline. These metrics should therefore be compared across ablations on the same dataset, but not treated as directly comparable across datasets without documenting the scaling conventions.
+
+The beta and lambda ablations optimize different objectives. In particular, the total value for the NLL-only condition omits both auxiliary terms and cannot be ranked directly against the control total. The primary forecasting metrics are consequently the most appropriate basis for selecting a model.
+
+Finally, the local Koopman operator uses the current ridge-regularized and norm-bounded implementation. This is important for numerical stability, but it means that the experiment is an evaluation of the implemented K²VAE system rather than a literal reproduction of an unregularized local DMD solve.
+
+### Concluding Remarks of the Ablation Analysis
+
+The ETTh1-L ablations support retaining RevIN, a moderate nonzero KL weight, and the reconstruction objective. Removing RevIN produces a clear deterioration in both primary forecasting metrics. Removing KL allows severe latent divergence, while applying KL at full strength produces near-collapse and substantially worse forecasts. Removing reconstruction also weakens forecast quality.
+
+The mixed Koopman configuration remains a defensible control. Dynamic Koopman is marginally better on this seed, but the difference is too small to justify replacing the mixed configuration without repeated-seed evidence. The preferred current setup is therefore the mixed Koopman model with RevIN enabled, $\beta=0.01$, and $\lambda_{rec}=0.5$.
 
 ### Our paper vs The reference - Ask Jake
 

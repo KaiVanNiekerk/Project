@@ -1,0 +1,21 @@
+{
+  "dataset": "ETTh1-L",
+  "ablation": "koopman-dynamic",
+  "seed": 2026,
+  "koopman_mode": "dynamic",
+  "use_revin": true,
+  "beta": 0.01,
+  "lambda_rec": 0.5,
+  "best_epoch": 7,
+  "best_val_total": 1.1574430434327376,
+  "test_losses": {
+    "total": 1.260945855786926,
+    "elbo": 0.997828838072325,
+    "nll": 0.9245130286404961,
+    "kl": 7.3315813227703694,
+    "rec": 0.5262340338606584,
+    "crps": 0.37654339522123337
+  },
+  "test_nmae_original": 0.3765217661857605,
+  "skipped_batches": 0
+}

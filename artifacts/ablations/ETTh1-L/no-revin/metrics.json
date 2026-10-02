@@ -1,0 +1,21 @@
+{
+  "dataset": "ETTh1-L",
+  "ablation": "no-revin",
+  "seed": 2026,
+  "koopman_mode": "mixed",
+  "use_revin": false,
+  "beta": 0.01,
+  "lambda_rec": 0.5,
+  "best_epoch": 2,
+  "best_val_total": 1.5705617446648448,
+  "test_losses": {
+    "total": 1.490924237590087,
+    "elbo": 1.2616130725333565,
+    "nll": 1.1361877228084363,
+    "kl": 12.542534639960842,
+    "rec": 0.4586223295252574,
+    "crps": 0.4233556472157177
+  },
+  "test_nmae_original": 0.4156047999858856,
+  "skipped_batches": 0
+}

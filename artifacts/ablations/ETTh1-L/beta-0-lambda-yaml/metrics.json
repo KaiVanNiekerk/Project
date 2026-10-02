@@ -1,0 +1,21 @@
+{
+  "dataset": "ETTh1-L",
+  "ablation": "beta-0-lambda-yaml",
+  "seed": 2026,
+  "koopman_mode": "mixed",
+  "use_revin": true,
+  "beta": 0.0,
+  "lambda_rec": 0.5,
+  "best_epoch": 8,
+  "best_val_total": 0.9893752305131209,
+  "test_losses": {
+    "total": 1.141531163140347,
+    "elbo": 0.9760167512454485,
+    "nll": 0.9760167512454485,
+    "kl": 1198.8753895006682,
+    "rec": 0.3310288214369824,
+    "crps": 0.38023460656404495
+  },
+  "test_nmae_original": 0.38712838292121887,
+  "skipped_batches": 0
+}

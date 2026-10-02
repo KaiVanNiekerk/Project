@@ -11,7 +11,7 @@ from preprocessing import k2vae_integration
 from revIN import RevIN
 
 class K2VAE(nn.Module):
-    def __init__(self, input_dim: int, d: int, m: int, n: int, integrator_args: dict, num_vars: int, patch_size: int, hidden_dim: int = 128, hidden_layers: int = 3, sigma_floor: float = 5e-2):
+    def __init__(self, input_dim: int, d: int, m: int, n: int, integrator_args: dict, num_vars: int, patch_size: int, hidden_dim: int = 128, hidden_layers: int = 3, sigma_floor: float = 5e-2, use_revin: bool = True, koopman_mode: str = "mixed"):
         """
         Args:
             input_dim (int): The size of a flattened multivariate patch (Variables * Patch Size).
@@ -23,6 +23,10 @@ class K2VAE(nn.Module):
             hidden_layers (int, optional): Number of hidden layers in the decoder MLPs. Defaults to 3.
             sigma_floor (float, optional): Minimum output standard deviation in
                 standardized data space. Defaults to 0.05.
+            use_revin (bool, optional): Whether to apply instance normalization.
+                Defaults to True.
+            koopman_mode (str, optional): Local/global Koopman combination:
+                ``static``, ``dynamic``, or ``mixed``. Defaults to ``mixed``.
         """
         super().__init__()
         self.d = d
@@ -31,10 +35,11 @@ class K2VAE(nn.Module):
         self.num_vars = num_vars
         self.patch_size = patch_size
         self.sigma_floor = sigma_floor
-        self.revin = RevIN(num_vars=num_vars, affine=True)
+        self.use_revin = use_revin
+        self.revin = RevIN(num_vars=num_vars, affine=True) if use_revin else None
 
         self.patch_embedding = nn.Linear(input_dim, d) # Projects the input patches to the latent measurement space 
-        self.koopman = KoopmanNet(d = d, hidden_dim = hidden_dim)  # Evaluates the measurement function and Koopman operator 
+        self.koopman = KoopmanNet(d=d, hidden_dim=hidden_dim, koopman_mode=koopman_mode)  # Evaluates the measurement function and Koopman operator
         self.integrator = Integrator(**integrator_args)  # Maps the Koopman residual to a control-input sequence over the prediction horizon 
         self.kalman = KalmanNet(state_dim = d) # # Refines linear state predictions and outputs process uncertainty (covariance)
 
@@ -89,7 +94,7 @@ class K2VAE(nn.Module):
             X_C_hat (torch.Tensor): (Batch, d, n), needed by forward() for
                 reconstructed_X_C_mu but not by sample_predictive()
         """
-        x_norm = self.revin(x, mode="norm")
+        x_norm = self.revin(x, mode="norm") if self.use_revin else x
         x_patched = k2vae_integration(x_norm, self.patch_size)
         X_p_prime_T = self.patch_embedding(x_patched.transpose(1, 2))
         X_p_prime = X_p_prime_T.transpose(1, 2)
@@ -114,7 +119,7 @@ class K2VAE(nn.Module):
         decoded_time = rearrange(
             decoded, "B (N s) p -> B (p s) N", N=self.num_vars, s=self.patch_size
         )
-        return self.revin(decoded_time, mode="denorm")
+        return self.revin(decoded_time, mode="denorm") if self.use_revin else decoded_time
 
     def _decode_sigma(self, latent: torch.Tensor) -> torch.Tensor:
         """Decode positive uncertainty and restore it to the input data scale."""
@@ -129,7 +134,8 @@ class K2VAE(nn.Module):
         # gradient even when its predicted uncertainty is near the minimum.
         # Keep uncertainty away from zero so the Gaussian NLL cannot become
         # numerically extreme when a forecast error is nonzero.
-        return self.revin.denormalize_sigma(sigma_norm) + self.sigma_floor
+        sigma = self.revin.denormalize_sigma(sigma_norm) if self.use_revin else sigma_norm
+        return sigma + self.sigma_floor
 
     def forward(self, x: torch.Tensor):
         """

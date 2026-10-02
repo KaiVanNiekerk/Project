@@ -91,11 +91,14 @@ class KoopmanNet(nn.Module):
                     ridge_system, ridge_rhs, driver="gelsd"
                 ).solution
             else:
-                # PyTorch exposes gelsd only for CPU; the augmented ridge system has
-                # full column rank, so CUDA's QR-based driver is appropriate here.
-                K_loc_T = torch.linalg.lstsq(
-                    ridge_system, ridge_rhs, driver="gels"
-                ).solution
+                # CUDA's batched gels driver can stall on this highly
+                # underdetermined augmented system. Solve the equivalent ridge
+                # normal equations directly on CUDA instead.
+                gram = torch.bmm(X_back_T.transpose(1, 2), X_back_T)
+                rhs = torch.bmm(X_back_T.transpose(1, 2), X_forward_T)
+                K_loc_T = torch.linalg.solve(
+                    gram + self.ridge_lambda * identity.unsqueeze(0), rhs
+                )
             K_loc = K_loc_T.transpose(1, 2)  # (B, d, d), returning to the original shape of the local operator
 
             if self.koopman_mode == "static":
