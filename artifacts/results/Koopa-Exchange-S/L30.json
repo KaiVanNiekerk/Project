@@ -1,0 +1,18 @@
+{
+  "model": "koopa",
+  "dataset": "Exchange-S",
+  "input_window": 30,
+  "horizon": 30,
+  "max_epochs": 100,
+  "nmae": 0.013891979120671749,
+  "crps": 0.08774227342184852,
+  "test_losses": {
+    "total": -0.2562711350071956,
+    "nll": -0.2562711350071956,
+    "crps": 0.08774227342184852,
+    "elbo": 0.0,
+    "kl": 0.0,
+    "rec": 0.0
+  },
+  "best_epoch": 12
+}

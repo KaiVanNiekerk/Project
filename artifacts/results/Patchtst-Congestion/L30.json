@@ -1,0 +1,18 @@
+{
+  "model": "patchtst",
+  "dataset": "Congestion",
+  "input_window": 30,
+  "horizon": 30,
+  "max_epochs": 100,
+  "nmae": 0.12534192204475403,
+  "crps": 0.30718389302492144,
+  "test_losses": {
+    "total": 0.5572865165537223,
+    "nll": 0.5572865165537223,
+    "crps": 0.30718389302492144,
+    "elbo": 0.0,
+    "kl": 0.0,
+    "rec": 0.0
+  },
+  "best_epoch": 11
+}
