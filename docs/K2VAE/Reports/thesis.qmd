@@ -77,9 +77,9 @@ abstract: "This project studies K2VAE, a Koopman-Kalman enhanced variational aut
   * Limitations
   * Future work
 
-## Introduction
+# Introduction
 
-### Problem Statement
+## Problem Statement
 
 Probabilistic time-series forecasting becomes difficult when the underlying process is nonlinear, noisy, and long-range dependent. In these settings, a forecasting model must do more than produce a point estimate: it must preserve uncertainty, remain stable over long horizons, and avoid compounding error as it rolls forward in time.
 
@@ -91,7 +91,7 @@ The K2VAE paper addresses this by combining three ideas that are individually us
 
 The core question for this project is whether that combination produces a forecasting model that is meaningfully better than the state-of-the-art baselines reported in the paper on long-horizon probabilistic forecasting tasks, especially when the data contain nonlinear structure, multivariate interactions, and forecast drift. The project is therefore not just about reproducing the paper’s architecture; it is about testing whether the architectural choices give a real forecasting advantage.
 
-### Literature Review
+## Literature Review
 
 Autoencoders (AEs) compress high-dimensional inputs into a lower-dimensional latent space, but that latent space is usually not structured for sampling or prediction. Variational autoencoders (VAEs) fix this by adding a probabilistic prior and optimising the Evidence Lower Bound (ELBO), which is the part of the K2VAE setup that makes the patch embeddings usable as a generative forecasting representation rather than just a deterministic feature vector [@hinton2006reducing; @kingma2014vae].
 
@@ -109,13 +109,13 @@ Patching then makes the whole pipeline tractable by shortening the input sequenc
 
 Should we add something on transformers here?
 
-### Chapter Outline
+## Chapter Outline
 
 The remainder of this thesis is structured to progressively develop a theoretical understanding of, implement, and evaluate the proposed architecture. Chapter 2 establishes the core mathematical foundations, detailing Koopman theory, Variational Autoencoders, the idea behind transformers and the Kalman-based state estimation. Building upon these principles, Chapter 3 details the methodology and practical implementation of the K$^2$VAE framework, illustrating how these individual components are integrated into a cohesive pipeline alongside data preprocessing and training objectives. Chapter 4 presents the experimental setup and evaluates the model against baseline approaches, offering both quantitative performance metrics and qualitative analyses of its point estimates and probabilistic confidence intervals through visualisations. Finally, Chapter 5 summarizes the core findings, evaluates the fulfillment of the research objectives, and outlines current limitations alongside potential avenues for future work.
 
-## Preliminaries
+# Preliminaries
 
-### Koopman Theory
+## Koopman Theory
 
 Time series forecasting is often difficult because the underlying dynamics are noisy, complex, and often nonlinear, as shown by the following state transition function $f$ that maps the current state $x_k$ to the next state $x_{k+1}$:
 
@@ -161,7 +161,7 @@ $$ {#eq-koopman-combined}
 
 Consequently, while the Koopman operator $\mathcal{K}$ allows us to forecast longer horizons with greater stability and accuracy without the compounding error that arises from nonlinear dynamics, there exists an inherent bias that is displayed from our residual error between the predicted and actual future states. To address this, additional components of our K$^2$VAE model are introduced, including an integrator to process nonlinear residuals and a KalmanNet-style refinement mechanism to improve the latent state estimate and model process uncertainty.
 
-### Kalman Filter
+## Kalman Filter
 
 The Kalman filter is a recursive algorithm that estimates the state of a dynamic system from noisy observations. It assumes the underlying process it is modeling is a linear state space model that alternates between a process model and an observation model [@kalman1960new].
 
@@ -209,7 +209,7 @@ $$ {#eq-kf-update-cov}
 
 The extension to the kalman filter to handle non linear systems is through the koopman operator and koopman theory. We also make use of KalmanNet, a neural network-based extension of the Kalman filter that learns the desired matrices $A$, $B$, $H$, $Q$, and $R$ from data, allowing it to adapt to complex and nonlinear dynamics [@kalmannet2021]. This is particularly useful in our context, where the underlying system may not adhere to the strict linear assumptions of the traditional Kalman filter.
 
-### Transformer (Encoder Based Vanilla)
+## Transformer (Encoder Based Vanilla)
 
 A transformer is a deep learning architecture that has revolutionized the field of natural language processing [@vaswani2017attention] and has also been applied to time-series forecasting [@nie2023patchtst]. It is based on the self-attention mechanism, which allows the model to weigh the importance of different parts of the input sequence when making predictions. This is particularly useful for time-series data, where the relationships between different time steps can be complex and non-linear. 
 
@@ -240,7 +240,7 @@ Both the multihead attention and the feedforward network are wrapped in residual
 
 Since attention treats the sequence as an unordered set, order information is injected separately, typically via a fixed positional encoding added to the input embeddings before the first layer [@vaswani2017attention]. Stacking $N$ such layers, with no causal masking and no decoder cross-attention, gives the encoder-only variant used here: a bidirectional token mixer mapping $\mathbb{R}^{n\times d} \to \mathbb{R}^{n\times d}$ that captures both local and global dependencies across the input sequence of token embeddings. K$^2$VAE makes use of a transformer encoder to process the left of nonlinearity that koopman does not capture. We call this the Integrator.
 
-### Variational Autoencoders
+## Variational Autoencoders
 
 While standard autoencoders compress high-dimensional data into a lower-dimensional latent space, they are inherently deterministic and lack the ability to model uncertainty in the latent representation [@hinton2006reducing]. The encoder maps inputs to exact point estimates in the latent space rather than probabilistic distributions, resulting in disjoint and arbitrary predictions between points [@doersch2016tutorial]. Variational Autoencoders (VAEs) address this by introducing a probabilistic framework in which the encoder maps inputs to a probability distribution over a continuous latent variable $Z$. This latent variable forces the model to learn a structured and smooth representation of the data, allowing for improved sampling and interpolation. 
 
@@ -260,11 +260,11 @@ $$ {#eq-vae-reparam}
 
 Rather than a standard neural network encoder and decoder architecture, we use a KoopmanNet, an Integrator, and a KalmanNet to form our encoder [@k2vae2025]. This projects the input time-series into a latent measurement space, processes the nonlinear residuals, and refines the latent state estimate, returning an approximate posterior distribution. The decoder acts as an inverse measurement function, mapping the latent representation back to the original observation space. This allows us to generate future predictions while also providing a measure of uncertainty in our forecasts.
 
-## K2VAE
+# K2VAE
 
 This chapter will make use of the theory and concepts introduced in the preliminaries to describe the K2VAE model. We will discuss its architecture, how the different components work and are integrated. We will also discuss the pre-processing steps required to prepare the data for input into the model, as well as the training objectives and loss functions used to optimize the model's performance.
 
-### Pre-processing
+## Pre-processing
 
 The pipeline below is applied to all datasets assessed within this work. We have selected two of the original paper datasets in order to compare with their benchmarks. These datasets have all been pre-cleaned and prepared by the original authors and we have only extracted them. These are ETTh-L as well as Exchange-S. We will also be evaluating the model on two of our own datasets namely Wind-L and Congestion-S. The datasets themselves will be explained in more detail in the results and experiments section.
 
@@ -314,7 +314,7 @@ Finally, all tensors described here carry an additional leading batch dimension 
 
 This data will then be treated as the input data into KoopmanNet.
 
-### Model pipeline 
+## Model pipeline 
 
 We first split our time series into 70% training data, 15% validation data and 15% test data.
 
@@ -324,11 +324,11 @@ The full architecture is shown in @fig-k2vae-pipeline. The input time series $X$
 
 KalmanNet then combines $U$ with the learned process model ($w_k \sim \mathcal{N}(0,Q)$) and observation model ($v_k \sim \mathcal{N}(0,R)$), iterating the predict-update recursion $k$ times to refine the latent mean $Z$ and covariance $P$ into $Z'$. This defines the approximate posterior $\mathbb{Q}(Z\mid X) = \mathcal{N}(Z', P)$, from which a latent code is drawn via the reparameterization trick, scaling a standard normal draw by the Cholesky factor $L$ of $P$ and resampling. The decoder $\psi^{-1}$ maps this sample to the final predictive distribution $\mathbb{P}(Y\mid Z)$.
 
-### How the model acts as a VAE
+## How the model acts as a VAE
 
 In the normal sense of a VAE that is outlined in the preliminaries, we have some input that gets encoded into a latent space via a decoder. This latent space which is structured is then drawn from allowing us to generate new samples. We then need to pass these samples through the decoder in an attempt to reconstruct the original input. In our case we have a context window $X$ which is first standardised using RevIN, then is passed through our encoder (KoopmanNet, Integrator, KalmanNet) to produce a latent space $Q$. This is done via KoopmanNet producing a linear forecast $\hat{X_H}$ and a reconstruction $\hat(X_C)$. The integrator then produces a nonlinear correction $U$ to the linear forecast from Koopman. KalmanNet then fuses these values together via its predict and update steps to produce our final latent space $Q$ which follows a $N(Z', P)$ Where Z' is the prediction from KalmanNet and P is the associated uncertainty. We sample from this normal distribution and this sample not $Z'$ itself is passed through the decoder. We have two separate decoder heads unlike a textbook VAE that would reconstruct the input, we instead have a decoder that produces a $\mu_X$ and a decoder that produces a $\sigma_X$. We make use of the same reparameterizatio trick outlined in @eq-vae-reparam. This $\mu_X$ and $\sigma_X$ are then denormalised via reverse RevIN. These denormalised values become our prediction and our uncertainty estimates, and then used to compute the negative log likelihood loss. The reconstruction loss is computed on the context window $\hat{X_C}$ that was output from Kalman and represented our reconstruction of the seen data.The KL divergence is computed between $Q$ and a multivariate standard normal distribution. The sum of these three losses creates our final loss function the extension to the ELBO mention in preliminaries. We then backpropagate through the model to update the weights of our entire encoder and decoder. This is done for an entire epoch after which we will use the validation set to compare across runs. We use this validation loss to select the best model. Which then sees the test set and produces our results.
 
-### Reversible Instance Normalization (RevIN)
+## Reversible Instance Normalization (RevIN)
 
 Real-world multivariate time-series data frequently display non-stationarity, where statistical properties such as the local mean and variance shift over time. While global standardization maps features to an overall zero mean and unit variance, it fails to mitigate localized distribution shifts across sliding windows. In long-horizon probabilistic forecasting, this unaddressed shift leads to prediction drift. A secondary issue in multivariate forecasting is scale entanglement. Multivariate datasets often combine variables that measure different physical quantities with vastly different numerical magnitudes. When these disparate quantities are modeled jointly, the numerical disparity complicates both latent dynamic modeling and probabilistic uncertainty estimation. If a single variance parameter attempts to model the uncertainty across all variables simultaneously, it is forced into a mathematical compromise that fails to capture the true variance of either the large or small scale variables. To address localized drift and decouple variable scales, Reversible Instance Normalization (RevIN), originally proposed by Kim et al., is integrated directly into the forecasting architecture.
 
@@ -358,7 +358,7 @@ An adaptation of the RevIN methodology was required to stabilize the probabilist
 
 Finally, because the model denormalizes its mean predictions back to original units, computing Mean Squared Error reconstruction loss directly on raw values introduces disproportionate gradient spikes for high-magnitude features. To maintain gradient stability, the context reconstruction is scaled down by the detached instance standard deviation $\sigma_X$ prior to evaluating the reconstruction loss term. The probabilistic horizon predictions are concurrently evaluated by the variance-linked Gaussian Negative Log-Likelihood in raw physical space.
 
-### The Koopman Network
+## The Koopman Network
 
 Standard deep learning forecasting models, such as recurrent networks or other state-of-the-art models like diffusion and flow-based models, predict the future iteratively. To predict step $t+2$, the model must first predict step $t+1$ and then feed that prediction back into its own nonlinear layers. This creates an autoregressive feedback loop where small approximation errors early in the sequence distort the input for future steps, causing errors to compound exponentially over long horizons. The Koopman network within the K$^2$VAE architecture bypasses this feedback loop entirely. By leveraging Koopman theory, the model maps the complex nonlinear time-series data into a higher-dimensional latent measurement space where the temporal dynamics progress approximately linearly. Because the transitions are linear, stepping forward in time does not require passing data back through nonlinear neural network layers; it simply requires matrix multiplication.
 
@@ -381,7 +381,7 @@ $$ {#eq-k2vae-residual}
 
 Where $X^{P^{*}}$ is the projected latent state and $\hat{X^{C}}$ is the reconstructed latent state from the Koopman operator. 
 
-### The Integrator
+## The Integrator
 
 Because the Koopman operator provides a purely linear approximation of the system dynamics, it inherently fails to capture complex nonlinear behaviors. The discrepancies between the true nonlinear dynamics and the linear approximation are isolated by computing the residual error over the context window. As defined in @eq-k2vae-residual, this residual $X^{Res}$ is the mathematical difference between the true mapped latent states and the Koopman network's linear reconstruction of those same states. In time-series forecasting, these residuals are not random noise. They contain structural, sequential patterns that the linear matrix could not model. The K$^2$VAE architecture utilizes a dedicated neural network module, termed the Integrator, to process these leftover nonlinear dynamics and translate them into a future correction sequence.
 
@@ -393,7 +393,7 @@ $$ {#eq-k2vae-integrator}
 
 In the codebase implementation, this transformation occurs in three sequential stages. The input residual tensor is first passed through a linear adaptation layer, projecting it from the Koopman measurement dimension into the specific working dimension required by the Transformer architecture. The adapted tensor is then passed through a stack of Transformer encoder layers, which execute the multi-head self-attention to evaluate the temporal dependencies across the entire context window. Finally, the encoded sequence is flattened and passed through a linear projection head. This maps the representation to the target horizon length, reshaping it into the final control sequence $U$. This sequence represents the projected nonlinear dynamics and is subsequently passed to the Kalman network to correct the final probabilistic forecast.
 
-### The Kalman Network
+## The Kalman Network
 
 The Kalman network is a neural network extension of the traditional Kalman Filter, designed to refine the latent state estimate and model process uncertainty in a data-driven manner. We treat the output from Koopman Net as the measurement we are comparing our prediction against to produce the posterior. Instead of having constant system matrices for $A$, $B$ and $H$ or covariance matrices $R$ and $Q$ it learns them through backpropagation. The linear future prediction from the Koopman network $\hat{X_H}$ and the nonlinear control sequence from the Integrator $U$ are used as the input. The Kalman network then merges these inputs to produce a refined future latent mean $Z'$ and a covariance matrix $P$ representing process uncertainty. The initial $Z$, $z_0$ is set to the measurement embedding of the RevIN normalised last context patch. $P$ as well as all other matrices are set to the identity matrix. The covariance matrices make use of lower triangular forms at each step and are then multiplied by their transposes to ensure they remain positive definite. This is called Cholesky decomposition. (Need formula here?)
 
@@ -411,17 +411,17 @@ As we are using a combination of many learnable matrices it is vital that we do 
 
 This is then done over all time steps in a forward pass, returning a vector for $Z_k$ and $P_k$. After this we then need to force the model to remember the non linearity from $U$. Throughout the process of prediction Kalman gain can reduce the impact of the non linearity thus losing some of its significance. We require the model to learn this non linearity so we produce $Z' = Z + U$. As the Koopman Operator improves the residual passed to the Integrator shrinks so $U \to 0$ and thus $Z' \to Z$.
 
-### The loss function
+## The loss function
 
 The K$^2$VAE model is trained to minimise an extension of the equation @eq-vae-elbo.
 
 $$
 \mathcal{L} = \underbrace{-\, \mathbb{E}\big[\log P(Y \mid Z, X)\big]}_{\text{NLL}} + \underbrace{\beta\, D_{KL}\big(Q(Z \mid X) \,\|\, P(Z \mid X)\big)}_{\text{KL}} + \underbrace{\lambda \|X - X^{Rec}\|_2^2}_{\text{Reconstruction}}
-$$
+$${#eq-k2vae-loss}
 
 The hyper parameters $\beta$ and $\lambda$ are used to make the loss function more flexible and allow us to weight the importance of each term dataset to dataset. The NLL term is the negative log likelihood of the predicted future horizon given the latent state and context. It represents how well the model can predict the held our portion of a context window given the rest of the context window. This pushes our model to produce more accurate forecasts. The KL term is the Kullback-Leibler divergence and compares our latent state distribution of $N(Z', P)$ to that of the prior distribution which a multivaritae standard normal. We do this to ensure the model learns a structured latent space and penalise the model for straying too far away from the prior. The reconstruction term is the mean squared error between the reconstructed context window from Koopman Net and the original context window. This is used to ensure that the model learns a good representation of the context window and underlying non linear dynamics. It ensures we do not lose information about the system in the latent space.
 
-### The K$^2$VAE Pipeline
+## The K$^2$VAE Pipeline
 
 The K$^2$VAE class is the central module that connects the individual architectural components into a complete, trainable probabilistic model. It takes the linear future prediction from the Koopman network and the nonlinear control sequence from the Integrator, passing both to the Kalman network. The Kalman network then merges these inputs to produce a refined future latent mean $Z'$ and a covariance matrix $P$ representing process uncertainty. 
 
@@ -439,11 +439,11 @@ $$ {#eq-k2vae-decoder-sigma}
 
 A specific numerical adjustment is required during this standard deviation decoding phase. As shown in @eq-k2vae-decoder-sigma, the model applies a softplus activation to ensure the standard deviation remains strictly positive, followed immediately by the addition of a defined minimum value, the sigma floor ($\sigma_{\text{floor}}$). Preventing the standard deviation from approaching zero is necessary because a near-zero variance causes the Gaussian negative log-likelihood loss function to approach infinity, leading to optimization failures during training. Once decoded, these outputs are denormalized by the RevIN module to produce the final probabilistic predictions in their original physical scale.
 
-## Results and Experiments
+# Results and Experiments
 
 In this section we will be discussing the datasets we have used, the hyper parameter tuning we have done, the other models we have benchmarked against and the results we have achieved. We will explain what our benchmark models are as well as why K$^2$VAE should out perform them. We will also conduct an ablation study on K$^2$VAE as well as a discussion on our results verses the original paper. An input window of 96 time steps has been used across all large datasets and models. While a input window of 30 has been used across the smaller datasets.
 
-### Datasets and preparation 
+## Datasets and preparation 
 
 the datasets used in this work are summarised in @tbl-datasets. They are each stored as a csv file with the first column holding the data and time and the rest are single columns for each variable. When reading in the datasets we drop the first column and feed the actual variables into the model maintaining the correct order. We have two types of datasets namely -L for large and -S for small. ETTh1 and Wind are our large datasets while Exchange and Congestion are our small datasets. We make use of YAML files to store dataset specific information including hyper parameters, model configurations as well as dataset locations. The model reads the associated YAML and retrieves the relevant information for each dataset.
 
@@ -462,7 +462,7 @@ Wind-L is another well know Probabilistic Time Series dataset that was already p
 
 Congestion was obtained from Kaggle via this link https://www.kaggle.com/datasets/anshtanwar/metro-interstate-traffic-volume/data?select=Metro_Interstate_Traffic_Volume.csv. This dataset was not fully preprocessed so we had to prepare it. First we removed all non-continuous features like holiday, weather_main and weather_description. This left us with temp, clouds_all and traffic_volume. We also notably dropped rain_1h and snow_1h as they were zero-valued for the entire selected window. Finally we truncated the dataset to the final contiguous period of 2017-09-30 to 2018-09-30 instead of using the entire 2012 to 2018 period. This resulted in a complete, gap-free hourly series with no duplicate or missing timestamps.
 
-### Hyperparameter Tuning
+## Hyperparameter Tuning
 
 Optimizing the K$^2$VAE architecture requires balancing continuous optimization coefficients alongside discrete structural parameters. The datasets evaluated in this study vary substantially in sequence length, patch count, and feature dimensions. A small model with low capacity fits shorter series without overfitting, while long sequences require larger latent dimensions and wider networks to capture extended temporal dynamics. Performing a joint high-dimensional search over all parameters across every individual dataset would cause a combinatorial explosion, rendering the computational cost unmanageable. To solve this, datasets were categorized into small-scale and large-scale tiers based on their context windows and sequence complexities. The small-scale tier was anchored by the Exchange-S benchmark, featuring shorter context windows of 30 steps. The large-scale tier was anchored by ETTh1-L, featuring extended contexts of 96 steps, larger channel capacities, and complex temporal dynamics.
 
@@ -474,13 +474,13 @@ Across both phases, model selection was determined strictly by the minimum total
 
 Instead of running sweeping pipelines across every individual dataset, full two-phase sweeps were run exclusively on the representative anchor benchmarks, Exchange-S and ETTh1-L. The resulting optimal hyperparameter configurations were then transferred directly to other datasets within the same scale category. This proxy tuning strategy is justified by how the model processes data internally. Under Reversible Instance Normalization and local patchification, input tokens are standardized into normalized feature dimensions before they are projected into the Koopman space. Because the inputs are normalized and chunked similarly, the network capacity required to approximate the transition matrix and the Integrator's attention mechanism relies primarily on the sequence length and channel rank. Datasets of similar scales share these dimensions, meaning a model capacity tuned on one dataset transfers well to another dataset of the same scale. Furthermore, because Reversible Instance Normalization scales every series to zero mean and unit variance, the relative magnitudes of the reconstruction error and the KL divergence penalty do not depend on the raw physical units of the time series. Instead, the balance between these loss terms depends primarily on the latent dimension $d$. As a result, the loss weights tuned on an anchor dataset remain properly balanced when applied to another dataset of similar scale.
 
-### External Model Benchmarks
+## External Model Benchmarks
 
 To evaluate the forecasting performance and uncertainty estimation of the K$^2$VAE framework, we compare it against two foundational long-sequence architectures, namely PatchTST and Koopa. The selection of these two models is directly tied to the theoretical foundations of K$^2$VAE. K$^2$VAE combines patch-based attention mechanisms with Koopman operator theory and Kalman state-space filtering. To determine whether this unified architecture offers a real forecasting advantage over existing approaches, we selected the leading modern benchmark from each individual paradigm. PatchTST serves as the representative state-of-the-art transformer model, isolating the impact of patching and attention without dynamical priors. Koopa serves as the representative state-of-the-art operator model, isolating the impact of Koopman theory on non-stationary time series without neural state-space filtering.
 
 Because both models were originally designed as deterministic point predictors, benchmarking them in a probabilistic forecasting framework required modifying their output layers. We adapted both architectures into probabilistic density estimators by equipping them with dual linear projection heads. The first head projects the backbone representation to the forecast horizon to output the predictive mean. The second parallel head outputs variance logits, which are transformed through a softplus activation and bounded by a minimum standard deviation floor of $0.05$. This floor prevents the variance from approaching zero and causing numerical instability in the Gaussian Negative Log-Likelihood objective. Both models also incorporate Reversible Instance Normalization, ensuring that all models normalize context windows and restore predictions to raw physical scales under identical conditions.
 
-#### PatchTST
+### PatchTST
 
 PatchTST adapts the vanilla Transformer architecture to multivariate time series by introducing two concepts: patching and channel independence. Instead of feeding raw individual timestamps into self-attention layers, PatchTST divides the context window into overlapping chunks called patches. Each patch is projected into an embedding vector, effectively shortening the token sequence length and aggregating local temporal patterns into single tokens. In addition, the model processes each variable completely independently, passing all channels through a shared Transformer backbone without allowing attention across different variables. The encoded patch representations are then flattened across the patch dimension and projected directly to the forecast horizon through a linear head.
 
@@ -488,7 +488,7 @@ The primary advantage of PatchTST is its computational efficiency and resistance
 
 We expect K$^2$VAE to outperform PatchTST on datasets with strong multivariate dependencies. While PatchTST discards cross-channel information, K$^2$VAE embeds full multivariate patches and refines their interactions inside the latent state space. Furthermore, K$^2$VAE replaces the static linear projection head with an explicit dynamical transition operator. This operator is a combined Koopman matrix learned directly from the data, which advances the latent states forward in time via mathematically stable matrix multiplication. Replacing the unconstrained projection with this structured matrix rollout should maintain greater stability over long forecasting horizons. In exchange for these modeling priors, K$^2$VAE requires more computational time to train than PatchTST due to its iterative KalmanNet recursion.
 
-#### Koopa
+### Koopa
 
 Koopa is an operator-based architecture built to model time series with non-stationary dynamics. Classical Koopman theory assumes that the underlying system is stationary and can be described by a single global transition operator. Koopa addresses distribution shifts by separating the time series into two distinct components using frequency filtering. Rather than requiring complex spectral mathematics, this filtering simply separates the dominant, recurring global patterns from the shifting, localized variations. The time-invariant component isolates the recurring global patterns and propagates them forward using a learnable global operator matrix. The time-varying component splits the remaining localized signals into temporal segments and fits local transition operators using regularized Ridge Dynamic Mode Decomposition. These two paths are stacked across residual blocks, allowing the model to capture shifting system behavior.
 
@@ -507,11 +507,11 @@ We expect K$^2$VAE to outperform Koopa on noisy and highly nonlinear benchmarks.
 
 : Code repositories for the models used in this work. {#tbl-repos}
 
-### Metrics
+## Metrics
 
 The metrics we use to evaluate our models in this paper are the Normalised Mean Absolute Error (NMAE) and the Continuous Ranked Probability Score (CRPS). Its important to note that in our codebase we did not select the optimal model based off of these values but rather the lowest validation loss value. We calculated theses metrics across our model as well as the benchmark models. This was done over 4 different prediction horizons: 96, 192, 336 and 720.
 
-#### NMAE
+### NMAE
 
 $$
 \text{NMAE} = \frac{\sum_{k=1}^{K} \sum_{t=1}^{T} \left| x_t^k - \hat{x}_t^k \right|}{\sum_{k=1}^{K} \sum_{t=1}^{T} \left| x_t^k \right|}
@@ -521,7 +521,7 @@ $K$ indexes variables, $T$ indexes the horizon timesteps, $x_t^k$/$\hat{x}_t^k$ 
 
 This error metric measures the total size of the prediction errors normalised by the total magnitude of the true data values. This gives us a scale-free measure of point-forecast accuracy that can be compared across datasets with very different units and ranges. NMAE is bounded below at 0, which is only achieved when the forecast predicted each value exactly. It has no fixed upper bound, since the numerator can grow arbitrarily large relative to the denominator. A useful reference point is NMAE $= 1$, the error obtained by trivially predicting zero for every timestep. A good score is therefore a value well below 1 and as close to 0 as possible, meaning the model comfortably outperforms this naive baseline.
 
-#### CRPS
+### CRPS
 
 $$
 \text{CRPS} = \int_{\mathbb{R}} \left( F(z) - \mathbb{I}\{x \leq z\} \right)^2 dz
@@ -539,11 +539,11 @@ $$
 \text{CRPS}(\hat{F}, x) = \frac{1}{n}\sum_{i=1}^{n} \left| X_i - x \right| - \frac{1}{2n^2}\sum_{i=1}^{n}\sum_{j=1}^{n} \left| X_i - X_j \right|
 $$ {#eq-crps-empirical}
 
-#### Relevance to our project
+### Relevance to our project
 
 NMAE and CRPS evaluate complementary aspects of a probabilistic forecast. NMAE only assesses the accuracy of the point forecast, ignoring any measure of the predicted uncertainty entirely. CRPS scores the whole predictive distribution, penalising a forecast that is either biased or poorly calibrated in its uncertainty. This distinction is particularly relevant to K$^2$VAE, since the KalmanNet is designed to model and refine process uncertainty rather than just the mean prediction. In a very basic sense NMAE assesses our actual prediction and CRPS measures the uncertainty. The reason we need both is a can achieve a low NMAE without producing well-calibrated confidence intervals. Thus it would still score poorly on CRPS, so reporting both metrics lets us separate raw forecasting accuracy from the quality of the uncertainty. 
 
-### Results
+## Results
 
 In this section we will be discussing the results of our implementation of the K$^2$VAE against the relative benchmarks. We will be assessing whether or not our assumptions held by looking at the relevant metrics and discussing the forecast plots. First we mention how the results were obtained.
 
@@ -568,7 +568,9 @@ We have made use of 1 seed to evaluate our models and note in the similar cases 
 
 Earlier we predicted that K$^2$VAE would outperform PatchTST on datasets with strong multivariate dependencies. Our results give some limited support to this. Both ETTh1-L and Wind-L have 7 variables, but those variables do different work. ETTh1-L records load and temperature readings from a single transformer. Wind-L pairs measured wind speed with weather covariates that genuinely drive it. Wind-L is therefore the dataset where cross-channel information should matter most, and it is the only dataset where we beat PatchTST. We win on CRPS at 192, 336 and 720 steps, although we still lose at 96. On ETTh1-L we lose to PatchTST at every horizon on both metrics. This is the pattern our prediction called for, but we should be clear that the win is a marginal one. Our CRPS margin over PatchTST is only about 0.02 to 0.03 at each of those three horizons. The margin by which we lose at 96 is larger than any of them. On NMAE we only edge out PatchTST at 192, and by 0.0008. These results also come from two datasets with a single run each.
 
-K$^2$VAE was designed to not degenerate to the same degree as other current models over longer horizons. From our results in @tbl-long-term-results we can see that this does not hold. For ETTh it degenerates the most and for Wind we can see that although it wins it still degenerates alongside the other models. The scale of this drop off is not seen in @k2vae2025. Across 96 to 720 steps on ETTh1-L their K$^2$VAE CRPS moves from 0.264 to 0.314, a change of 0.050, while ours moves from 0.3841 to 0.5384, a change of 0.154. Their NMAE changes by 0.060 against our 0.129. We still observe worse metrics as horizons increase and thus our implementation of KoopmanNet and KalmanNet to create a better reconstruction of latent dynamics and predict off that has not worked to their desired effect. Why our implementation degrades so much faster and produces worse results than theirs is something we return to in the next section. We will also discuss why CRPS across all models in our paper is higher than in theirs.
+K$^2$VAE was designed to not degenerate to the same degree as other current models over longer horizons. From our results in @tbl-long-term-results we can see that this does not hold. For ETTh it degenerates the most and for Wind we can see that although it wins it still degenerates alongside the other models. The scale of this drop off is not seen in @k2vae2025. Across 96 to 720 steps on ETTh1-L their K$^2$VAE CRPS moves from 0.264 to 0.314, a change of 0.050, while ours moves from 0.3841 to 0.5384, a change of 0.154. Their NMAE changes by 0.060 against our 0.129. We still observe worse metrics as horizons increase and thus our implementation of KoopmanNet and KalmanNet to create a better reconstruction of latent dynamics and predict off that had not seemed to worked to their desired effect.
+
+We do note that the absolute change overstates the difference. Our CRPS and theirs are not normalised in the same way, which we discuss in the next section, and our model also starts from a higher value so the same relative decay produces a larger absolute change. Measured as a ratio our CRPS grows by 1.40 times across the horizon against their 1.19 times, and our NMAE by 1.34 times against their 1.18 times. The gap is therefore real but smaller than the raw differences suggest. We discuss the potential reasons why our results degrade faster than the published ones, and why CRPS across all of our models is higher than theirs, in the next section.
 
 | Model | Metric | Exchange-S | Congestion-S |
 |:--|:--|--:|--:|
@@ -583,7 +585,7 @@ K$^2$VAE was designed to not degenerate to the same degree as other current mode
 
 @tbl-short-term-results reports the same two metrics for the two short-term datasets at a forecasting horizon of 30 steps. We can see that the K$^2$VAE model is competitive against the two benchmark models producing similar results for CRPS in the short term. We do note that NMAE is less competitive especially on Congestion. PatchTST wins across all metrics. We beat Koopa on Congestion but lose to it on Exchange. This is interesting as the claim from @k2vae2025 states that Exchange owing to its nonstationarity and drift should give K$^2$VAE a significant advantage. Thus in the short term K$^2$VAE is competitive but from our implementation we can not say it consistently out performs in the short run.
 
-After examining both @tbl-long-term-results and @tbl-short-term-results we can say that our implementation of the more complicated K$^2$VAE model does not out perform Koopa nor PatchTST. Our model either lags behind or produces close to equivalent results. In the cases that K$^2$VAE did in fact win it did not win by a large margin. We also note that all three of our models produce higher CRPS than their published counterparts in @k2vae2025, while our Koopa and PatchTST often produce lower NMAE than theirs. The meaningful comparison is therefore between our own three models rather than against the published table, and we discuss the reasons for this in the next section.  We have not conducted timed trials of the models but our implementation of K$^2$VAE took noticeably longer to train for equivalent or worse results than Koopa and PatchTST.
+After examining both @tbl-long-term-results and @tbl-short-term-results we can say that our implementation of the more complicated K$^2$VAE model does not out perform Koopa nor PatchTST. Our model either lags behind or produces close to equivalent results. In the cases that K$^2$VAE did in fact win it did not win by a large margin. We also note that all three of our models produce higher CRPS than their published counterparts in @k2vae2025, while our Koopa and PatchTST often produce lower NMAE than theirs. The meaningful comparison is therefore between our own three models rather than against the published table, and we discuss the possible reasons for this in the next section.  We have not conducted timed trials of the models but our implementation of K$^2$VAE took noticeably longer to train for equivalent or worse results than Koopa and PatchTST.
 
 The tables above tell us where our implementation places against the benchmarks. They do not tell us how our model actually produces a forecast. The figures that follow show K$^2$VAE's own behaviour on each dataset. We only show plots for our own model. We also only show the shortest horizon for each dataset. These figures are meant to show how the model builds a forecast rather than how it degrades or how it compares to other models. 
 
@@ -593,7 +595,7 @@ Each plot has four lines and a shaded band. The blue line is the observed contex
 
 ![K$^2$VAE forecast versus truth on ETTh1-L at a forecasting horizon of 96 steps, with a context window of 96 steps. The dashed line marks the end of the context window, and the shaded band is the 95% predictive interval.](../../../artifacts/plots/ETTh1-L/forecast_vs_truth_L96.png){#fig-k2vae-etth1-l96 width=100%}
 
-@fig-k2vae-etth1-l96 shows our model on ETTh1-L at 96 steps. The reconstruction tracks the context closely on all six channels, so the Koopman operator is capturing the observed past well. How much of that carries into the forecast depends on the channel. HUFL and MUFL are the strongly cyclical channels and this is where we predict best. We pick up the daily cycle and our peaks line up with the true peaks in both timing and height. We do note that we overshoot on trough, the true series bottoms out near -5 while we predict closer to -15. HULL and MULL have the right shape but we damp the amplitude, so our peaks sit below the true ones. LUFL and LULL are where we do worst. These channels are noisier with less obvious structure, and our forecast mostly sits near the mean instead of following the movement.
+@fig-k2vae-etth1-l96 shows our model on ETTh1-L at 96 steps. The reconstruction tracks the context closely on all six channels, so the Koopman operator is capturing the observed past well. How much of that carries into the forecast depends on the channel. HUFL and MUFL are the strongly cyclical channels and this is where we predict best. We pick up the daily cycle and our peaks line up with the true peaks in both timing and height. We do note that we overshoot on trough, the true series bottoms out near -5 while we predict closer to -15. HULL and MULL have the right shape but we damp the amplitude, so our peaks sit below the true ones. LUFL and LULL are where we do worst. One these datasets our Koopman's reconstruction is worse as we are not able to pick up on the sudden spikes well. These channels are noisier with less obvious structure, and our forecast mostly sits near the mean instead of following the movement.
 
 The other thing to note is how wide our uncertainty bands are. On HUFL the band runs from roughly -50 to 25 while the series itself only moves between -20 and 20. We are spreading our probability much wider than the data needs, which fits with our CRPS being the worst of the three models on this dataset.
 
@@ -611,16 +613,45 @@ The other thing to note is how wide our uncertainty bands are. On HUFL the band 
 
 After examining all four plots we note that our reconstruction is good on every dataset. Thus the koopman operator is doing its job for reconstructing the nonlinear time series. On the other hand our forecasts are much weaker than our reconstructions. We witness the same failure modes which we can imagine would be compounded over larger horizons leading to the model producing worse metrics over longer horizons. We consistently dampen the amplitude of cycles. We fall back towards the mean on channels that are noisy or drifting. Our confidence bands are very wide. This suggests that the issue in our implementation occurs in its rollout. Our model can describe what it has seen but struggles to predict it forward. In the next section we look at where our implementation differs from @k2vae2025 and use those differences as potential justification on why our forecasts fail in this way. 
 
-### Our paper vs The reference
+## Our paper vs The reference
 
-- Want to mention our model validated on elbo nor crps
-- They calculate crps differently as they use PRobTS (metnion their eqn vs @eq-crps-empirical)
-- their latent dist disregards z' and centers around 0 rather.
-- They completely change the loss function, when comparing it to the equation given in the paper itself where no coefficients are stated it completely collapses to a straight line, we thus had to add the coefficients in order ot get results.
-- We clamp ...
-- They used ProbTS
-- They had access to much more hp tuning etc etc.
-- Different training / test / val split. 
+When we started replicating the model from @k2vae2025 we noticed a number of differences between the paper that we have attempted to replicate and the reference code base. In this section we will be discussing the major differences between our implementation and the paper. We will discuss certain differences between the paper and the code that we had to implement in order to get comparable results as well as the differences we were either not able to implement or chose not to as we believed it would stray too far from the reference paper. We attempted to only add the differences that would allow our model to be comparable or to actually learn. From the results above we can see that our implementation of K$^2$VAE does not outperform the benchmarks like the original paper does. We will discuss the differences between our implementation and the reference paper and how they may have contributed to this.
+
+When we first ran our model using the loss function provided in the paper we witnessed a partial posterior collapse. In their reported loss function it does not contain the coefficients found in ours @eq-k2vae-loss. However in their code when looking at the loss function you can see it contains the coefficients. We had to add the coefficients of $\beta$ and $\lambda_{rec}$ as without them the loss function gets completely dominated by KL divergence. @fig-full-kl-forecast shows the results of this. We thus needed to add in the coefficients in order to get the model to learn anything at all.
+
+![K$^2$VAE forecast versus truth on ETTh1-L with the unweighted loss function ($\beta = 1$, $\lambda_{rec} = 1$), at a forecasting horizon of 96 steps with a context window of 96 steps.](../../../artifacts/plots/ablations/ETTh1-L/beta-1-lambda-1/forecast_vs_truth.png){#fig-full-kl-forecast width=100%}
+
+The reconstruction still tracks the context closely, so the Koopman operator is not the part that has failed. The forecast mean is flattened into a low amplitude wiggle around a near constant level. On HUFL it moves between roughly 0 and 6 while the true series swings between -15 and 15. The confidence bands are enormous and almost constant in width, so the model is reporting that it knows very little about the horizon. Our posterior has been pulled onto the prior. We note that the collapse is not total, since some structure survives in the mean as the results are not a complete flat line. The larger effects of this is explored in more depth in the ablations section.
+
+From further dissection of their codebase we note that in their loss function they do not include the Z' term inside their latent distribution and rather use a N(0,P). This is a major deviation as they have removed Z' from the loss function. We found that especially with larger $\beta$ terms the model would collapse and it would learn that setting Z' = -U (the output of the integrator) it would report a more "accurate" KL divergence producing an artificially low elbo. Thus allowing the model to escape learning the latent dynamics. They side step this issue entirely by removing Z' from the loss function.
+
+Another major deviation we added that was not included in the original paper, but was included in the codebase was RevIN. We added it because without instance normalisation the model could not cope with the changing level and scale of each context window. The effect of its absence is explored in more depth in the ablations section.
+
+In regards to why across all models we see larger CRPS values than they report come down to the way we split our data, the way we train our models as well as the way we actually calculate crps. 
+
+In the original paper they do not mention how they split their data. We created our own training procedure and splitting ratios where as they make use of ProbTS or GluonTS to handle splitting and training. ProbTS and GluonTS are black boxes that themselves would require lots of dissection to understand. We thought it to be out of scope of our project and thought that our own training and splitting procedures would be appropriate for producing an adequate version of the K$^2$VAE. We make use of a constant split of 70% training, 15% validation and 15 testing. We also make use of the entire dataset. In their code base they do not use ratios but rather for ETTh-L they use hardcoded month borders training on 12, validating on 4 and testing on 4. In their hardcoded monthly split they test on rows [11520-14400] we however using our ratio test on rows [14807-17420]. Thus we note that our actual two reported test sets have zero overlap. Our entire test set region for ETTh-L sits inside a region that they disregard. When it comes to Exchange-S we keep our constant split ratio where they use GluonTS to build the training series. This again leads to our test sets being different.
+
+We also stayed true to our loss function and validated our model against the validation set's ELBO value. From examining their code base we note that they have selected their model based on the lowest validation CRPS value not from validation on ELBO. 
+
+ -- FLAG need to reference from ProbTS and GluonTS here --
+
+When it comes to CRPS we calculate it using @eq-crps-empirical while they use a different method through ProbTS. The documented equation @eq-crps for CRPS requires knowing the true distribution $F$, which in practice is impossible and thus it must be approximated. We approximate it with the empirical CDF of 100 posterior predictive samples and evaluate the closed form identity in @eq-crps-empirical. This is a similar CRPS process that @k2vae2025 report that they use. However they get this metric from ProbTS which takes an alternative route. It also draws 100 samples, but reduces them to a set of empirical quantiles and scores those quantiles with the pinball loss. For each quantile level $q$ it computes
+
+$$
+QL_q = \sum 2\left|(\hat{y}_q - y)\left(\mathbb{I}\{y \leq \hat{y}_q\} - q\right)\right|
+$$
+
+It then divides by the sum of the absolute ground truth values and averages across the quantile levels
+
+$$
+\text{CRPS}_{\text{ProbTS}} = \frac{1}{|Q|}\sum_{q \in Q} \frac{QL_q}{\sum |y|}
+$$
+
+We note that this is a different calculation which is discrete using quantiles. They further divide their CRPS by the sum of the absolute ground truth values which is not done in @eq-crps-empirical. This leads to CRPS being a dimensionless metric alongside NMAE. There is a major difference in how we calculate CRPS as well as how we normalise. Their metric is computed on denormalised data in the original units of the series, while ours is computed on the standardised tensors used by our training objective. CRPS scales with the size of the data, so the way each implementation normalises changes the value that gets reported. ProbTS divides the summed quantile loss by the sum of the absolute ground truth values ($|y|$) across every channel at once, and it does this on the original unscaled data. We instead compute our CRPS on the standardised tensors, which divides each channel by its own standard deviation before scoring. The two numbers are therefore not the same quantity and should not be compared directly. This applies equally to our Koopa and PatchTST runs, so it affects all three of our models in the same way. This matters for how @tbl-long-term-results should be read. Our CRPS values are much larger than those reported in @k2vae2025, but a large part of that gap is normalisation rather than forecast quality, so the levels should not be read as evidence that our model forecasts far worse than theirs.
+
+Normalisation helps to explain the difference in CRPS level but it does not explain why our results degrade faster across the horizon. NMAE is defined identically in both cases and is computed on the original data in both cases, yet all three of our models still degrade more across the horizon than the published ones. This also holds for the two benchmark models that we did not write, so it is not specific to our K$^2$VAE. These metric degradations are persistent across our implementation which could point at our training and evaluation setup rather than at anything specific to our model.
+
+All of our models were trained, validated and tested using our constant split not their hardcoded split. Our models present test results on different parts of the timeseries to theirs. All of our models were validated against the ELBO not against CRPS. All of our models used the empirical CDF calculation for CRPS and not the quantile approach used in ProbTS. These two approaches normalise by different quantities and so do not produce comparable values. A combination of all these differences as well as the likely lead to our models producing different results. They also had access to more in-depth hyperparameter tuning and thus their models may have been better optimised than ours. (Do we need this summary?)
 
 ## Ablation Analysis
 
@@ -760,4 +791,3 @@ Finally, the local Koopman operator uses the current ridge-regularized and norm-
 The ETTh1-L ablations support retaining RevIN, a moderate nonzero KL weight, and the reconstruction objective. Removing RevIN produces a clear deterioration in both primary forecasting metrics. Removing KL allows severe latent divergence, while applying KL at full strength produces near-collapse and substantially worse forecasts. Removing reconstruction also weakens forecast quality.
 
 The mixed Koopman configuration remains a defensible control. Dynamic Koopman is marginally better on this seed, but the difference is too small to justify replacing the mixed configuration without repeated-seed evidence. The preferred current setup is therefore the mixed Koopman model with RevIN enabled, $\beta=0.01$, and $\lambda_{rec}=0.5$.
-
