@@ -690,7 +690,7 @@ The current ETTh1-L configuration uses $\beta=0.01$ and $\lambda_{rec}=0.5$. The
 
 @tbl-ablation-design presents the ordinary K²VAE configuration alongside the isolated component changes. The control condition uses the mixed Koopman operator, RevIN, and the values specified in the dataset configuration. The static Koopman condition retains only the locally fitted operator, while the dynamic condition retains only the global operator. The remaining experiments examine the KL weight, the reconstruction weight, the joint removal of both auxiliary terms, and the removal of RevIN.
 
-The experiments follow a one-factor-at-a-time design with one targeted cross-effect. The Full KL condition ($\beta=1.0$, $\lambda_{rec}=1.0$) represents the canonical unweighted ELBO—where all terms have unit weight as in standard VAE theory—rather than an isolated $\beta$ ablation. The NLL-only condition is included because it shows what happens when both auxiliary objective terms are removed. A complete factorial grid was not used, since it would introduce many repeated combinations and make the effect of individual components more difficult to interpret.
+The experiments follow a one-factor-at-a-time design with one targeted cross-effect. The Full KL condition ($\beta=1.0$, $\lambda_{rec}=1.0$) represents the canonical unweighted ELBO where all terms have unit weight as in standard VAE theory, rather than an isolated $\beta$ ablation. The NLL-only condition is included because it shows what happens when both auxiliary objective terms are removed. A complete factorial grid was not used, since it would introduce many repeated combinations and make the effect of individual components more difficult to interpret.
 
 ### Forecasting Results
 
