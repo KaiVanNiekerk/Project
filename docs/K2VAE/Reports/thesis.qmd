@@ -125,7 +125,7 @@ $$
 x_{k+1} = f(x_k)
 $$
 
-The issue arises as our prediction horizon grows, resulting in compounding error and drift. Koopman theory provides a way to linearise the dynamics by mapping the finite-dimensional nonlinear state space into a higher infinite-dimensional space where the evolution is linear, which is characterised via a measurement function. This is achieved through the Koopman operator, which acts on observable functions of the state rather than the state itself [@koopman2021modern]:
+This formulation represents a strictly Markovian assumption, meaning the future state $x_{k+1}$ depends exclusively on the current state $x_k$ and requires no additional historical memory. In ideal physical systems where $x_k$ fully describes the environment, this holds true. However, real-world time-series data is rarely perfectly Markovian; it contains hidden variables, unobserved external shocks, and long-range temporal dependencies. If a model forces a strictly Markovian transition onto non-Markovian data, the missing context manifests as unmodeled noise. The issue arises as our prediction horizon grows, resulting in compounding error and drift.   Koopman theory provides a way to linearise the dynamics by mapping the finite-dimensional nonlinear state space into a higher infinite-dimensional space where the evolution is linear, which is characterised via a measurement function. By expanding the dimensionality of the state, the Koopman framework can implicitly encode those complex historical dependencies into the newly constructed observable space, bridging the gap between non-Markovian reality and Markovian linear algebra. This is achieved through the Koopman operator, which acts on observable functions of the state rather than the state itself [@koopman2021modern]: 
 
 $$
 \psi(x_{k+1}) = \psi(f(x_k)) = \mathcal{K} \circ \psi(x_k)
@@ -475,11 +475,15 @@ Congestion was obtained from Kaggle via this link https://www.kaggle.com/dataset
 
 ## Hyperparameter Tuning
 
--- needs more math, showing optimla params in expectations, need to than say why some coninious uses basyesian and the discrete use grid search.
-
 Optimizing the K$^2$VAE architecture requires balancing continuous optimization coefficients alongside discrete structural parameters. The datasets evaluated in this study vary substantially in sequence length, patch count, and feature dimensions. A small model with low capacity fits shorter series without overfitting, while long sequences require larger latent dimensions and wider networks to capture extended temporal dynamics. Performing a joint high-dimensional search over all parameters across every individual dataset would cause a combinatorial explosion, rendering the computational cost unmanageable. To solve this, datasets were categorized into small-scale and large-scale tiers based on their context windows and sequence complexities. The small-scale tier was anchored by the Exchange-S benchmark, featuring shorter context windows of 30 steps. The large-scale tier was anchored by ETTh1-L, featuring extended contexts of 96 steps, larger channel capacities, and complex temporal dynamics.
 
-To further manage the search space, the hyperparameter tuning was implemented as a structured two-phase pipeline using Weights and Biases to coordinate experiments and log metrics. The first phase focused on continuous hyperparameters that directly affect gradient stability and loss balancing. This included the learning rate, the KL divergence penalty weight, and the context reconstruction loss weight. We employed Bayesian optimization for this phase to construct a probabilistic model of the objective function, dynamically balancing exploration and exploitation. The search spaces were configured across specific intervals, testing learning rates of $1.0 \times 10^{-4}$, $5.0 \times 10^{-4}$, and $1.0 \times 10^{-3}$ for small-scale benchmarks, and $5.0 \times 10^{-4}$, $1.0 \times 10^{-3}$, and $2.0 \times 10^{-3}$ for large-scale benchmarks. The KL divergence weights were evaluated across $1.0 \times 10^{-4}$, $5.0 \times 10^{-4}$, and $1.0 \times 10^{-3}$ for small datasets, and $0.005$, $0.01$, and $0.02$ for large datasets. Both scales utilized reconstruction loss weights of $0.5$, $1.0$, and $2.0$.
+To further manage the search space, hyperparameter tuning followed a two-phase pipeline using Weights and Biases. The first phase focused on continuous hyperparameters that control gradient stability and loss balancing: the learning rate, the KL divergence penalty, and the reconstruction loss weight. Let our target function be $f(\theta) = \mathcal{L}_{\text{val}}(\theta)$, representing the final validation loss for a set of hyperparameters $\theta$. Because fully training the K$^2$VAE model to evaluate $f(\theta)$ is computationally expensive, we used Bayesian optimization. Instead of testing combinations randomly, the search builds a probabilistic predictive model to estimate how untested parameters will perform. To decide which configuration $\theta$ to test next, the algorithm calculates the Expected Improvement (EI). This metric naturally balances refining known good parameters against exploring completely untested regions. It is formulated as:
+
+$$
+EI(\theta) = \mathbb{E}\left[\max(f(\theta^*) - f(\theta), 0)\right]
+$$
+
+where $\theta^*$ is the configuration that has produced the lowest validation loss so far. By choosing the hyperparameters that maximize this expected improvement, the algorithm systematically zeros in on the optimal configuration with far fewer training runs.The search spaces were configured across specific intervals, testing learning rates of $1.0 \times 10^{-4}$, $5.0 \times 10^{-4}$, and $1.0 \times 10^{-3}$ for small-scale benchmarks, and $5.0 \times 10^{-4}$, $1.0 \times 10^{-3}$, and $2.0 \times 10^{-3}$ for large-scale benchmarks. The KL divergence weights were evaluated across $1.0 \times 10^{-4}$, $5.0 \times 10^{-4}$, and $1.0 \times 10^{-3}$ for small datasets, and $0.005$, $0.01$, and $0.02$ for large datasets. Both scales utilized reconstruction loss weights of $0.5$, $1.0$, and $2.0$. 
 
 Conditioned on the optimal continuous parameters extracted from the first phase, the second phase executed an exhaustive grid search over structural parameters. These parameters control model capacity and include the latent dynamic dimension, the measurement multilayer perceptron hidden dimension, and the network depth. Because discrete structural combinations exhibit clear transitions in parameter count, grid evaluation provides a deterministic map of capacity constraints versus performance. For small-scale datasets, the grid tested latent dimensions of 32, 64, and 128, hidden dimensions of 64, 128, and 256, and depths of 1, 2, and 3 layers. Large-scale datasets were evaluated across latent dimensions of 64, 128, and 256, hidden dimensions of 128, 256, and 512, and depths of 2, 3, and 4 layers. This approach resulted in 27 exhaustive runs per scale.
 
@@ -491,13 +495,29 @@ Instead of running sweeping pipelines across every individual dataset, full two-
 
 To evaluate the forecasting performance and uncertainty estimation of the K$^2$VAE framework, we compare it against two foundational long-sequence architectures, namely PatchTST and Koopa. The selection of these two models is directly tied to the theoretical foundations of K$^2$VAE. K$^2$VAE combines patch-based attention mechanisms with Koopman operator theory and Kalman state-space filtering. To determine whether this unified architecture offers a real forecasting advantage over existing approaches, we selected the leading modern benchmark from each individual paradigm. PatchTST serves as the representative state-of-the-art transformer model, isolating the impact of patching and attention without dynamical priors. Koopa serves as the representative state-of-the-art operator model, isolating the impact of Koopman theory on non-stationary time series without neural state-space filtering.
 
-Because both models were originally designed as deterministic point predictors, benchmarking them in a probabilistic forecasting framework required modifying their output layers. We adapted both architectures into probabilistic density estimators by equipping them with dual linear projection heads. The first head projects the backbone representation to the forecast horizon to output the predictive mean. The second parallel head outputs variance logits, which are transformed through a softplus activation and bounded by a minimum standard deviation floor of $0.05$. This floor prevents the variance from approaching zero and causing numerical instability in the Gaussian Negative Log-Likelihood objective. Both models also incorporate Reversible Instance Normalization, ensuring that all models normalize context windows and restore predictions to raw physical scales under identical conditions.
+Because both Koopa and PatchTST were originally built to predict single, exact point values, we had to modify them to output probabilistic forecasts. We did this by splitting their final output layer into two separate mathematical pathways. Let $Z_{\text{enc}}$ represent the internal features learned by the model's main architecture.The first pathway calculates the predicted mean, $\hat{Y}_{\mu}$:
 
--- Maybe slight more math for PatchTST and Koopa --
+$$
+\hat{Y}_{\mu} = W_{\mu} Z_{\text{enc}} + b_{\mu}
+$$
+
+The second pathway calculates the uncertainty, $\hat{Y}_{\sigma}$. Because standard deviation must always be a positive number, we pass the output through a softplus function. We also add a minimum floor of 0.05:
+
+$$
+\hat{Y}_{\sigma} = \text{softplus}(W_{\sigma} Z_{\text{enc}} + b_{\sigma}) + 0.05
+$$
+
+Adding this 0.05 floor is a vital safety mechanism. It prevents the predicted uncertainty from ever hitting exactly zero, which would cause the math to crash during training. Since the models now predict a full distribution rather than just a single point, we replaced their standard training objective (Mean Squared Error) with a probabilistic one. We train them using the Gaussian Negative Log-Likelihood ($\mathcal{L}_{\text{NLL}}$) calculated over the forecasting horizon:
+
+$$
+\mathcal{L}_{\text{NLL}} = \frac{1}{2} \sum \left( \log(2\pi\hat{Y}_{\sigma}^2) + \frac{(Y - \hat{Y}_{\mu})^2}{\hat{Y}_{\sigma}^2} \right)
+$$
+
+This adaptation ensures that Koopa and PatchTST output proper probability distributions, providing a fair comparison against K$^2$VAE. Finally, both benchmark models were also equipped with Reversible Instance Normalization, ensuring all three models handle data scaling and non-stationarity in exactly the same way.
 
 ### PatchTST
 
-PatchTST adapts the vanilla Transformer architecture to multivariate time series by introducing two concepts: patching and channel independence. Instead of feeding raw individual timestamps into self-attention layers, PatchTST divides the context window into overlapping chunks called patches. Each patch is projected into an embedding vector, effectively shortening the token sequence length and aggregating local temporal patterns into single tokens. In addition, the model processes each variable completely independently, passing all channels through a shared Transformer backbone without allowing attention across different variables. The encoded patch representations are then flattened across the patch dimension and projected directly to the forecast horizon through a linear head.
+PatchTST adapts the Transformer architecture to multivariate time series by introducing two concepts: patching and channel independence. Instead of feeding raw individual timestamps into self-attention layers, PatchTST divides the context window into overlapping chunks called patches. Each patch is projected into an embedding vector, effectively shortening the token sequence length and aggregating local temporal patterns into single tokens. In addition, the model processes each variable completely independently, passing all channels through a shared Transformer backbone without allowing attention across different variables. The encoded patch representations are then flattened across the patch dimension and projected directly to the forecast horizon through a linear head.
 
 The primary advantage of PatchTST is its computational efficiency and resistance to overfitting. Shortening the sequence length through patching reduces the quadratic computational complexity of self-attention, making training and inference remarkably fast compared to standard point-wise attention models. Furthermore, treating channels independently prevents the attention mechanism from learning noisy correlations between variables. However, this design carries distinct weaknesses. Strict channel independence completely ignores cross-variable dynamics, which are critical in physical or financial systems where variables co-evolve. In addition, PatchTST relies on an unconstrained linear projection to map past patch tokens to future time steps. It lacks an underlying dynamical systems model to enforce temporal continuity, making it vulnerable to prediction drift across extended horizons.
 
@@ -822,3 +842,21 @@ Finally, the local Koopman operator uses the current ridge-regularized and norm-
 The ETTh1-L ablations support retaining RevIN, a moderate nonzero KL weight, and the reconstruction objective. Removing RevIN produces a clear deterioration in both primary forecasting metrics. Removing KL allows severe latent divergence, while applying KL at full strength produces near-collapse and substantially worse forecasts. Removing reconstruction also weakens forecast quality.
 
 The mixed Koopman configuration remains a defensible control. Dynamic Koopman is marginally better on this seed, but the difference is too small to justify replacing the mixed configuration without repeated-seed evidence. The preferred current setup is therefore the mixed Koopman model with RevIN enabled, $\beta=0.01$, and $\lambda_{rec}=0.5$.
+
+# Appendix {#sec-appendix}
+
+## Hyperparameter Tuning Dashboards {#sec-appendix-tuning}
+
+This section provides the comprehensive training dashboards for the two-phase hyperparameter optimization process described in the Hyperparameter Tuning section.
+
+### ETTh1-L Optimization
+
+![Phase 1 Bayesian Optimization for continuous hyperparameters on ETTh1-L.](../../../artifacts/plots/sweep_dashboards/01_ETTh1-L_Phase1_Bayesian_dashboard.png){#fig-etth1-phase1 width=100%}
+
+![Phase 2 Grid Search for structural capacity parameters on ETTh1-L.](../../../artifacts/plots/sweep_dashboards/02_ETTh1-L_Phase2_Grid_dashboard.png){#fig-etth1-phase2 width=100%}
+
+### Exchange-S Optimization
+
+![Phase 1 Bayesian Optimization for continuous hyperparameters on Exchange-S.](../../../artifacts/plots/sweep_dashboards/03_Exchange-S_Phase1_Bayesian_dashboard.png){#fig-exchange-phase1 width=100%}
+
+![Phase 2 Grid Search for structural capacity parameters on Exchange-S.](../../../artifacts/plots/sweep_dashboards/04_Exchange-S_Phase2_Grid_dashboard.png){#fig-exchange-phase2 width=100%}

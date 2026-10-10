@@ -71,9 +71,9 @@ for sweep_path, clean_name in SWEEPS.items():
 
     plt.tight_layout()
     
-    # Export as SVG
-    svg_path = os.path.join(OUTPUT_DIR, f"{clean_name}_dashboard.svg")
-    plt.savefig(svg_path, format="svg", bbox_inches='tight')
+    # Export as PNG
+    png_path = os.path.join(OUTPUT_DIR, f"{clean_name}_dashboard.png")
+    plt.savefig(png_path, format="png", bbox_inches='tight')
     plt.close()
     
-    print(f"Saved: {svg_path}")
+    print(f"Saved: {png_path}")
