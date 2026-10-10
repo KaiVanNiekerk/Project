@@ -19,7 +19,7 @@ format:
       text: |
         \providecommand{\abstractname}{Abstract}
         \newenvironment{abstract}{\chapter*{\abstractname}}{}
-abstract: "This project studies K2VAE, a Koopman-Kalman enhanced variational autoencoder for probabilistic time-series forecasting. The aim is to determine whether a structured latent dynamics model can improve long-horizon forecasting by combining patch-based tokenisation, Koopman-inspired latent linearisation, KalmanNet-style refinement, and variational decoding. The project will evaluate prediction accuracy, uncertainty quality, and forecasting stability on benchmark datasets, then compare K2VAE against the state-of-the-art baselines used in the paper, with ablation studies if time permits."
+abstract: "This project studies K2VAE, a Koopman-Kalman enhanced variational autoencoder for probabilistic time-series forecasting. The aim is to determine whether a structured latent dynamics model can improve long-horizon forecasting by combining patch-based tokenisation, Koopman-inspired latent linearisation, KalmanNet-style refinement, and variational decoding. The project will evaluate prediction accuracy, uncertainty quality, and forecasting stability on benchmark datasets, then compare K2VAE against other state-of-the-art baselines , with additional ablation studies."
 ---
 
 5 chapters
@@ -843,9 +843,29 @@ The ETTh1-L ablations support retaining RevIN, a moderate nonzero KL weight, and
 
 The mixed Koopman configuration remains a defensible control. Dynamic Koopman is marginally better on this seed, but the difference is too small to justify replacing the mixed configuration without repeated-seed evidence. The preferred current setup is therefore the mixed Koopman model with RevIN enabled, $\beta=0.01$, and $\lambda_{rec}=0.5$.
 
-# Appendix {#sec-appendix}
+# Conclusion 
 
-## Hyperparameter Tuning Dashboards {#sec-appendix-tuning}
+This study investigated the K$^2$VAE architecture for probabilistic time-series forecasting, assessing whether the combination of patch-based tokenization, Koopman-inspired linearization, and KalmanNet refinement provides a tangible advantage over state-of-the-art operator (Koopa) and attention-based (PatchTST) baselines. While the Koopman network demonstrated a strong ability to capture and reconstruct complex nonlinear contexts, the overall architecture struggled to project these dynamics forward accurately. The forecasts frequently underestimated cyclical amplitudes, defaulted to flat mean predictions on noisy data or longer horizons, and produced excessively wide confidence intervals. As a result, our implementation did not consistently outperform the baselines, achieving marginal improvements only on the strongly multivariate Wind-L dataset while degrading faster over extended 720-step horizons than anticipated.
+
+## Recommendations
+
+Based on the ablation study, we recommend several strict configurations for deploying K$^2$VAE. Reversible Instance Normalization (RevIN) is essential; without it, the model cannot stabilize against localized distribution shifts, resulting in immediate training collapse. The variational objective also requires precise calibration: the KL penalty must be heavily down-weighted to prevent posterior collapse, while the context reconstruction term should be retained to improve overall forecast calibration. Finally, the mixed Koopman operator should be kept as the most robust default configuration.
+
+## Limitations
+
+The primary limitation of our ablation study is its restricted experimental scope. By relying on a single dataset (ETTh1-L) and one random initialization, the model's statistical variance and generalizability across different time-series domains remain unquantified. Furthermore, because the early stopping policy minimized the total variational loss, the final selected epochs prioritize overall probabilistic balance rather than isolating the absolute lowest point-forecasting error.
+
+## Future Work
+
+A potential avenue for future research lies in redesigning the variational prior. Currently, K$^2$VAE forces the latent space to conform to an uninformed standard normal prior ($\mathcal{N}(0, I)$). Future iterations could address the model's excessively wide uncertainty bands by adopting a Bayesian updating approach analogous to the Black-Litterman (BL) asset allocation model.
+
+Originating in quantitative finance, the BL model uses a Bayesian methodology that effectively updates currently held opinions with data to form new opinions. This framework allows judgmental managers to give their views; these views are added to the quantitative model, and the final forecasts reflect a blend of both viewpoints. Within the BL model, an individual's beliefs are mathematically represented as a set of linear relationships, which are parameterized by known hyperparameters.
+
+Applying this underlying philosophy to K$^2$VAE would generalize this technique beyond finance to any specialized forecasting domain. It would involve replacing the generic normal prior with a structured, expert-informed prior. By formulating domain-specific rules, physical system limits, or expert forecasts as linear relationships parameterized into the prior distribution, the model would be forced to integrate the KalmanNet's data-driven posterior with human expertise. This could theoretically restrict the overly wide confidence bands, prevent the forecast from defaulting to a flat mean during noisy periods, and provide a mathematically robust bridge between pure machine learning and traditional judgmental forecasting.
+
+# Appendix 
+
+## Hyperparameter Tuning Dashboards
 
 This section provides the comprehensive training dashboards for the two-phase hyperparameter optimization process described in the Hyperparameter Tuning section.
 
