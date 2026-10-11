@@ -22,61 +22,6 @@ format:
 abstract: "This project studies K2VAE, a Koopman-Kalman enhanced variational autoencoder for probabilistic time-series forecasting. The aim is to determine whether a structured latent dynamics model can improve long-horizon forecasting by combining patch-based tokenisation, Koopman-inspired latent linearisation, KalmanNet-style refinement, and variational decoding. The project will evaluate prediction accuracy, uncertainty quality, and forecasting stability on benchmark datasets, then compare K2VAE against other state-of-the-art baselines , with additional ablation studies."
 ---
 
-5 chapters
-
-- Intro (last)
-
-	- Problem statement
-
-	- Lit rev
-
-	- Chapter outline
-
-- Prelims
-
-	- All theory we need to introduce methodology
-
-	- Koopman(small summary of idea if easy then break down why useful to us, Koopman operator etc etc)
-
-	- Integrator 
-
- 	- Kalman
-
-	- VAE 
-
-	- MAYBE: Other models
-
-- K2-model
-
-	- What s this model, what are we actually doing here (model specific stuff)
-
-	- Architecture
-
-	- Pre processing (Prepare for model)
-
-	- All stuff we need to implement to make model work
-
-- Results + Experiments
-
-	- Libraries etc etc
-
-	- Preprocessing (Data cleaning) talk about format
-
-	- Hyper parameter tuning what we use show some graphs
-
-	- Actual results and experiments
-
-	- MAYBE: Other models
-
-	- Ablations
-
-* Conclusion 
-
-  * Conclusion (Summary of what we did and what main results were)
-  * Offer recommendation
-  * Limitations
-  * Future work
-
 # Introduction
 
 ## Problem Statement
@@ -244,23 +189,55 @@ Since attention treats the sequence as an unordered set, order information is in
 
 ## Variational Autoencoders
 
--- Add figure of VAE to help explain, explain ti as a normal VAE, then go into a Probablistic Time Series VAE --
+In order to understand what a Variational Autoencoder (VAE) is, we first need to understand what an autoencoder (AE) is. AEs are a type of neural network that, instead of predicting some target $\hat{y}$ from the data $x$, attempt to reconstruct $x$ itself. 
 
-While standard autoencoders compress high-dimensional data into a lower-dimensional latent space, they are inherently deterministic and lack the ability to model uncertainty in the latent representation [@hinton2006reducing]. The encoder maps inputs to exact point estimates in the latent space rather than probabilistic distributions, resulting in disjoint and arbitrary predictions between points [@doersch2016tutorial]. Variational Autoencoders (VAEs) address this by introducing a probabilistic framework in which the encoder maps inputs to a probability distribution over a continuous latent variable $Z$. This latent variable forces the model to learn a structured and smooth representation of the data, allowing for improved sampling and interpolation. 
+As shown in @fig-autoencoder, an encoder compresses the input $x$ through progressively narrower layers into a low-dimensional latent representation. We then reverse this process with a decoder that maps this representation back to a reconstruction $\hat{x}$ [@hinton2006reducing]. Because the latent layer is narrower than the input, the network cannot simply copy $x$ through. It is forced to learn a compact encoding that keeps the structure needed to reconstruct the data. 
 
-In our probabilistic time-series forecasting context, we aim to accurately model the conditional distribution of future observations $Y$, given an observed context window $X$. This ultimately requires finding the true posterior distribution $\mathbb{P}(Z|X)$, which is often intractable. VAEs approximate this true posterior with a variational distribution $\mathbb{Q}(Z|X)$, which is parameterized by the encoder. The VAE framework minimizes the Evidence Lower Bound (ELBO) loss to maximize the likelihood of the observed data while minimizing the divergence between the approximate and true posterior distributions [@kingma2014vae]:
+![A standard (deterministic) autoencoder. The encoder maps the input $x$ to a lower-dimensional latent representation, from which the decoder produces a reconstruction $\hat{x}$. Adapted from @riebesell2022autoencoder.](../thesis-figures/autoencoder.png){#fig-autoencoder width=75%}
+
+AEs are then trained to minimise their reconstruction error, which is some function measuring the difference between the input and the reconstruction. The latent space is forced to learn a good representation of the data that it observes. However, this latent space may contain disjoint clusters for different types of data, and there may be regions of the latent space that do not correspond to any valid data. This brings about an issue within the latent space itself. It has no structure and thus we cannot reliably sample from it. The decoder has only ever seen the exact points that training inputs were encoded to, so if we move even slightly away from one of these points, there is no guarantee that it will decode to anything meaningful.
+
+VAEs address this by introducing a probabilistic framework that encourages structure in the latent space and allows for sampling. Rather than mapping an input to a single point in the latent space, the VAE encoder outputs two vectors: a mean $\mu(x)$ and a standard deviation $\sigma(x)$. Together these define a Gaussian distribution over a continuous latent variable $z$, known as the approximate posterior [@kingma2014vae]:
+
+$$
+\mathbb{Q}(z|x) = \mathcal{N}\big(z;\, \mu(x),\, \operatorname{diag}(\sigma^2(x))\big)
+$$ {#eq-vae-encoder}
+
+It approximates the true posterior $\mathbb{P}(z|x)$, the distribution over latent variables given the data, which is intractable to compute directly [@kingma2014vae]. Instead of passing a fixed code to the decoder, we draw a sample $z$ from this distribution, and the decoder $\mathbb{P}(x|z)$ maps it back to a reconstruction $\hat{x}$. @fig-vae shows this structure. Compared with @fig-autoencoder, the encoder now ends in two separate layers for $\mu$ and $\sigma$, and these feed a sampling layer whose output is fed to the decoder.
+
+![A variational autoencoder. The encoder outputs a mean $\mu$ and a standard deviation $\sigma$ for each latent dimension, a latent vector is sampled from the resulting Gaussian, and the decoder reconstructs $\hat{x}$ from that sample. Adapted from @riebesell2022vae.](../thesis-figures/vae.png){#fig-vae width=85%}
+
+Ideally, we would train the model by maximising the log-likelihood of the data, $\log \mathbb{P}(x)$, but this is also intractable, since it requires integrating over every possible $z$ [@kingma2014vae]. Instead, the VAE maximises the Evidence Lower Bound (ELBO), a tractable lower bound on $\log \mathbb{P}(x)$. In practice we minimise its negative, which splits into two terms [@kingma2014vae]:
+
+$$
+\mathcal{L}_{VAE} = \underbrace{-\mathbb{E}_{\mathbb{Q}(z|x)}\left[\log \mathbb{P}(x|z)\right]}_{\text{reconstruction}} + \underbrace{D_{KL}\left(\mathbb{Q}(z|x)\,\|\,\mathbb{P}(z)\right)}_{\text{regularisation}}, \qquad \mathbb{P}(z) = \mathcal{N}(0, I)
+$$ {#eq-vae-loss}
+
+The first term is the reconstruction loss we saw for the standard AE. If the decoder outputs a Gaussian with fixed variance, the negative log-likelihood is proportional to the squared Euclidean distance between $x$ and its reconstruction [@doersch2016tutorial], so this term plays the same role as the AE's reconstruction error. The second term is the Kullback-Leibler (KL) divergence which measures how far the encoder's distribution is from a prior $\mathbb{P}(z)$ that we choose in advance, usually a standard normal, and acts as a regulariser that encourages the approximate posterior to stay close to that prior [@kingma2014vae]. When both distributions are Gaussian, the KL term has a closed form [@kingma2014vae]:
+
+$$
+D_{KL}\left(\mathbb{Q}(z|x)\,\|\,\mathcal{N}(0, I)\right) = -\frac{1}{2}\sum_{j=1}^{J}\left(1 + \log \sigma_j^2 - \mu_j^2 - \sigma_j^2\right)
+$$ {#eq-vae-kl}
+
+where $J$ is the dimension of the latent space. This makes the trade-off between the two terms visible. The KL term is zero only when $\mu_j = 0$ and $\sigma_j = 1$ in every dimension, for every input. At that point the latent distribution is identical for every $x$ and carries no information about it. The reconstruction term pulls the other way in an attempt to accurately reconstruct $x$.
+
+This regularisation is what addresses the lack of structure in a normal AE. Because the encoder's distribution for every input is pulled towards the same prior, the encodings of different groups of data are kept close together and overlap, rather than forming isolated clusters with empty space between them. When we sample $z$ from $\mathbb{Q}(z|x)$, it lands near, but not exactly at, the mean $\mu(x)$. During training the decoder learns to reconstruct from these samples, and the KL term keeps neighbouring encodings overlapping, so points in this region decode to plausible outputs rather than noise. 
+
+When attempting to optimise this objective, we encounter a challenge: we must sample the latent variable $z$ from the encoder's predicted distribution $\mathbb{Q}(z|x)$, which is a stochastic operation that is not differentiable. To address this, we employ the reparameterisation trick, which allows us to express the sampling operation as a deterministic function of the encoder's parameters. We now have a separate source of randomness, a noise variable $\epsilon \sim \mathcal{N}(0, I)$ [@kingma2014vae]. Because all of the randomness now sits in $\epsilon$, which does not depend on the model, this enables us to backpropagate gradients through the sampling process and optimise the model using standard gradient-based methods:
+
+$$
+z = \mu + \sigma \odot \epsilon
+$$ {#eq-vae-reparam}
+
+The VAE above models the distribution of the data $x$ itself. In probabilistic time-series forecasting, we instead want to model the future observations $Y$ given an observed context window $X$, where $X$ and $Y$ now denote windows of the series rather than single data points. We want a distribution over those futures rather than a single prediction. This is where uncertainty becomes important. A standard forecasting model, trained to minimise the distance between its prediction and the truth, produces a single point forecast. When several futures are plausible it tends to predict something in between them [@doersch2016tutorial]. A conditional VAE (CVAE) addresses both requirements by conditioning the whole generative process on the input, so that the model learns a distribution $\mathbb{P}(Y|X)$ that we can sample from [@doersch2016tutorial]. K$^2$VAE is trained with the conditional form of the objective [@k2vae2025]:
 
 $$
 \mathcal{L}_{ELBO} = -\mathbb{E}[\log \mathbb{P}(Y|Z, X)] + D_{KL}(\mathbb{Q}(Z|X) || \mathbb{P}(Z|X))
 $$ {#eq-vae-elbo}
 
-This evidence lower bound consists of two terms: the reconstruction loss, which measures how well the model can reconstruct the observed data from the latent representation, and the Kullback-Leibler (KL) divergence, which regularizes the latent space by encouraging the approximate posterior to be close to our selected prior distribution. This forces the approximate posterior to remain smooth and continuous, which is crucial for generating coherent and realistic future predictions. By optimizing the ELBO, we can learn a latent representation that captures the underlying structure of the time-series data while also providing a measure of uncertainty in our predictions.
+This has the same two-term structure as @eq-vae-loss, with every distribution now conditioned on the context window. The first term is the forecast negative log-likelihood. It measures how well the decoder's predictive distribution explains the true future $Y$, given a latent sample $Z$ and the context $X$. The second term is the KL divergence between the encoder's approximate posterior and the prior. Following the K$^2$VAE paper, we write this prior as $\mathbb{P}(Z|X)$ and set it to $\mathcal{N}(0, I)$ [@k2vae2025]. 
 
-When attempting to optimize this objective, we encounter a challenge: we must sample the latent variable $Z$ from the encoder's predicted distribution $\mathbb{Q}(Z|X)$, which is a stochastic operation that is not differentiable. To address this, we employ the reparameterization trick, which allows us to express the sampling operation as a deterministic function of the encoder's parameters and a separate source of randomness [@kingma2014vae]. This enables us to backpropagate gradients through the sampling process and optimize the model using standard gradient-based methods:
-
-$$
-Z = \mu + \sigma \odot \epsilon, \quad \epsilon \sim \mathcal{N}(0, I)
-$$ {#eq-vae-reparam}
+One difference from the textbook CVAE should be noted. In Doersch's formulation, the encoder sees both the context and the target during training, giving an approximate posterior $\mathbb{Q}(z|Y, X)$ [@doersch2016tutorial]. In K$^2$VAE, the encoder receives only the context window, so the approximate posterior is $\mathbb{Q}(Z|X)$ and the model sees $Y$ only through the loss.
 
 Rather than a standard neural network encoder and decoder architecture, we use a KoopmanNet, an Integrator, and a KalmanNet to form our encoder [@k2vae2025]. This projects the input time-series into a latent measurement space, processes the nonlinear residuals, and refines the latent state estimate, returning an approximate posterior distribution. The decoder acts as an inverse measurement function, mapping the latent representation back to the original observation space. This allows us to generate future predictions while also providing a measure of uncertainty in our forecasts.
 
@@ -845,7 +822,9 @@ The mixed Koopman configuration remains a defensible control. Dynamic Koopman is
 
 # Conclusion 
 
-This study investigated the K$^2$VAE architecture for probabilistic time-series forecasting, assessing whether the combination of patch-based tokenization, Koopman-inspired linearization, and KalmanNet refinement provides a tangible advantage over state-of-the-art operator (Koopa) and attention-based (PatchTST) baselines. While the Koopman network demonstrated a strong ability to capture and reconstruct complex nonlinear contexts, the overall architecture struggled to project these dynamics forward accurately. The forecasts frequently underestimated cyclical amplitudes, defaulted to flat mean predictions on noisy data or longer horizons, and produced excessively wide confidence intervals. As a result, our implementation did not consistently outperform the baselines, achieving marginal improvements only on the strongly multivariate Wind-L dataset while degrading faster over extended 720-step horizons than anticipated.
+This study investigated the K$^2$VAE architecture for probabilistic time-series forecasting, assessing whether the combination of patch-based tokenization, Koopman-inspired linearization, and KalmanNet refinement provides a tangible advantage over state-of-the-art operator (Koopa) and attention-based (PatchTST) baselines for long term forecasting. While the Koopman network demonstrated a strong ability to capture and reconstruct complex nonlinear contexts, the overall architecture struggled to project these dynamics forward accurately. The forecasts frequently underestimated cyclical amplitudes, defaulted to flat mean predictions on noisy data or longer horizons, and produced excessively wide confidence intervals. As a result, our implementation did not consistently outperform the baselines, achieving marginal improvements only on the strongly multivariate Wind-L dataset while degrading faster over extended 720-step horizons than anticipated.
+
+We were unable to replicate the original K$^2$VAE results, which suported superior results across Exchange-S and ETTh1-L. The discrepancies appear to stem from differences in data splitting, model selection criteria, and CRPS calculation methods. Our ablation study further highlighted the critical role of RevIN for training stability, the necessity of a carefully calibrated KL penalty to avoid posterior collapse, and the importance of retaining the context reconstruction term for forecast calibration.
 
 ## Recommendations
 
