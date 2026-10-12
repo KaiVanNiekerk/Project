@@ -58,9 +58,11 @@ Should we add something on transformers here?
 
 ## Chapter Outline
 
-The remainder of this thesis is structured to progressively develop a theoretical understanding of, implement, and evaluate the proposed architecture. Chapter 2 establishes the core mathematical foundations, detailing Koopman theory, Variational Autoencoders, the idea behind transformers and the Kalman-based state estimation. Building upon these principles, Chapter 3 details the methodology and practical implementation of the K$^2$VAE framework, illustrating how these individual components are integrated into a cohesive pipeline alongside data preprocessing and training objectives. Chapter 4 presents the experimental setup and evaluates the model against baseline approaches, offering both quantitative performance metrics and qualitative analyses of its point estimates and probabilistic confidence intervals through visualisations. Finally, Chapter 5 summarizes the core findings, evaluates the fulfillment of the research objectives, and outlines current limitations alongside potential avenues for future work.
+The remainder of this thesis is structured to progressively develop a theoretical understanding of, implement, and evaluate the proposed architecture. Chapter 2 establishes the core mathematical foundations, detailing Koopman theory, the transformer encoder, Kalman-based state estimation and Variational Autoencoders. Building upon these principles, Chapter 3 details the methodology and practical implementation of the K$^2$VAE framework, illustrating how these individual components are integrated into a cohesive pipeline alongside data preprocessing and training objectives. Chapter 4 presents the experimental setup and evaluates the model against baseline approaches, offering both quantitative performance metrics and qualitative analyses of its point estimates and probabilistic confidence intervals through visualisations. Finally, Chapter 5 summarizes the core findings, evaluates the fulfillment of the research objectives, and outlines current limitations alongside potential avenues for future work.
 
 # Preliminaries
+
+This chapter introduces the theoretical foundations on which K$^2$VAE is built. The sections follow the order in which the components appear in the model pipeline. Koopman theory is introduced first, followed by the transformer encoder used as the Integrator and then the Kalman filter. The chapter concludes with the variational autoencoder framework that brings these components together.
 
 ## Koopman Theory
 
@@ -108,25 +110,59 @@ $$ {#eq-koopman-combined}
 
 Consequently, while the Koopman operator $\mathcal{K}$ allows us to forecast longer horizons with greater stability and accuracy without the compounding error that arises from nonlinear dynamics, there exists an inherent bias that is displayed from our residual error between the predicted and actual future states. To address this, additional components of our K$^2$VAE model are introduced, including an integrator to process nonlinear residuals and a KalmanNet-style refinement mechanism to improve the latent state estimate and model process uncertainty.
 
+## Transformer Encoder
+
+A transformer is a deep learning architecture that has become widely used in natural language processing [@vaswani2017attention] and has also been applied to time-series forecasting [@nie2023patchtst]. It is based on the self-attention mechanism, which allows the model to weigh the importance of different parts of the input sequence when making predictions. This is particularly useful for time-series data, where the relationships between different time steps can be complex and nonlinear.
+
+Given a sequence of $n$ input token embeddings $X \in \mathbb{R}^{n \times d}$, the transformer computes three matrices through linear transformations: the query $Q$, the key $K$, and the value $V$ [@vaswani2017attention]:
+$$
+Q = XW^Q, \quad K = XW^K, \quad V = XW^V
+$$ {#eq-transformer-qkv}
+
+Here, $X$ is the input sequence of token embeddings, and $W^Q$, $W^K$ and $W^V$ are learnable weight matrices. Each token computes a weighted average of the values $V$, based on the similarity between its query and the keys of all other tokens. This is done using the scaled dot-product attention mechanism. It allows the model to relate tokens to each other regardless of their position in the sequence. The attention output for each token is computed as follows:
+$$
+\text{Attention}(Q, K, V) = \text{softmax}\left(\frac{QK^\top}{\sqrt{d_k}}\right)V
+$$ {#eq-transformer-attention}
+
+Transformers use multi-head attention, which allows the model to jointly evaluate information from different representation subspaces. This enables the model to capture various aspects of the input sequence simultaneously. Each head computes its own attention scores and outputs. These outputs are then concatenated and linearly transformed to produce the final output [@vaswani2017attention]:
+$$
+\text{MultiHead}(Q, K, V) = \text{Concat}(\text{head}_1, \ldots, \text{head}_h)W^O
+$$ {#eq-transformer-multihead}
+Here, $W^O$ is a learnable weight matrix that projects the concatenated outputs of all heads back into the original embedding space.
+
+The output of the multi-head attention is then processed by a position-wise feedforward network. This network consists of two linear transformations with a ReLU activation in between, applied independently to each position in the sequence [@vaswani2017attention]:
+
+$$
+\mathrm{FFN}(x) = \underbrace{\max(0,\, xW_1 + b_1)}_{\text{ReLU}}\,W_2 + b_2
+$$ {#eq-transformer-ffn}
+
+Here, $W_1$ and $W_2$ are learnable weight matrices, and $b_1$ and $b_2$ are learnable bias vectors. The feedforward network allows the model to capture complex relationships and interactions within a single token embedding, whereas attention captures dependencies between token embeddings.
+
+Both the multi-head attention and the feedforward network are wrapped in residual connections and layer normalisation, which help stabilise training and improve convergence.
+
+Since attention treats the sequence as an unordered set, order information must be injected separately. This is typically done with a fixed positional encoding, added to the input embeddings before the first layer [@vaswani2017attention]. Stacking $N$ such layers, without causal masking or decoder cross-attention, gives the encoder-only variant used here. It acts as a bidirectional token mixer, mapping $\mathbb{R}^{n\times d} \to \mathbb{R}^{n\times d}$, that captures both local and global dependencies across the sequence of token embeddings. K$^2$VAE uses a transformer encoder to process the nonlinear residual that the Koopman operator does not capture [@k2vae2025]. This component is called the Integrator. Its output is passed to the Kalman filter as a control input, as described in the next section.
+
 ## Kalman Filter
 
-The Kalman filter is a recursive algorithm that estimates the state of a dynamic system from noisy observations. It assumes the underlying process it is modeling is a linear state space model that alternates between a process model and an observation model [@kalman1960new].
+The Kalman filter is a recursive algorithm that estimates the state of a dynamic system from noisy observations. It assumes that the underlying process is a linear state-space model, which alternates between a process model and an observation model [@kalman1960new].
 
-The process model describes how the system (hidden state) evolves over discrete time steps.
+The process model describes how the hidden state of the system evolves over discrete time steps:
 $$
 x_k = A x_{k-1} + B u_k + w_k, \qquad w_k \sim \mathcal{N}(0, Q)
 $$ {#eq-kf-process}
-$x_k$ is the state vector at time step $k$, $A$ is the state transition matrix (The underlying dynamics of a system), $B$ is the control input matrix (The effect of control inputs on the system), $u_k$ is the control input (The external input to the system), and $w_k$ is the process noise, which is assumed to be Gaussian with zero mean and covariance $Q$.
 
-The observation model relates this hidden state to the noisy observations actually observed.
+Here, $x_k$ is the state vector at time step $k$, and $A$ is the state transition matrix, which describes the underlying dynamics of the system. $B$ is the control input matrix, which describes how the control input $u_k$, an external input to the system, affects the state. The process noise $w_k$ is assumed to be Gaussian with zero mean and covariance $Q$.
+
+The observation model relates the hidden state to the noisy observations:
 $$
 o_k = H x_k + v_k, \qquad v_k \sim \mathcal{N}(0, R)
 $$ {#eq-kf-observation}
-$o_k$ is the observation vector at time step $k$, $H$ is the observation matrix (The relationship between the hidden state and the observed measurements, helps map state space into observation space), and $v_k$ is the observation noise, which is also assumed to be Gaussian with zero mean and covariance $R$. 
 
-Making use of these two models at each time step, the Kalman filter executes a prediction step (using the process model) and an update step (using the observation model) to refine its estimate of the hidden state.
+Here, $o_k$ is the observation vector at time step $k$. $H$ is the observation matrix, which describes the relationship between the hidden state and the observed measurements by mapping the state space into the observation space. The observation noise $v_k$ is also assumed to be Gaussian with zero mean and covariance $R$.
 
-The prediction step uses the process model to predict the next state and its uncertainty based on the previous state estimate.
+At each time step, the Kalman filter uses these two models in turn. A prediction step uses the process model, and an update step uses the observation model to refine the estimate of the hidden state.
+
+The prediction step uses the process model to predict the next state and its uncertainty from the previous state estimate:
 
 $$
 \hat{x}_k = A x_{k-1} + B u_k
@@ -136,14 +172,14 @@ $$
 \hat{P}_k = A P_{k-1} A^\top + Q
 $$ {#eq-kf-predict-cov}
 
-$\hat{x}_k$  is the state estimate and $\hat{P}_k$ is the uncertainty (covariance) of the state estimate.
+Here, $\hat{x}_k$ is the predicted state estimate and $\hat{P}_k$ is its covariance, which represents the uncertainty of the estimate.
 
-We then use the observation model to correct our state estimate based on the new observation $o_k$ and how much we trust prediction against how much we trust the observation. This is called the Kalman gain $K_k$. Which is computed as follows:
+The update step then corrects this prediction using the new observation $o_k$. The balance between trusting the prediction and trusting the observation is set by the Kalman gain $K_k$, which is computed as follows:
 $$
 K_k = \hat{P}_k H^\top \left( H \hat{P}_k H^\top + R \right)^{-1}
 $$ {#eq-kf-gain}
 
-The Kalman gain is the ratio of the uncertainty between the prediction step $\hat{P}_k$ and the observation noise $R$. The $H$ is used to map the state space into observation space so the covariance matrices can be compared. The Kalman gain is then used to update the state estimate and its uncertainty, taking us from our predicted ($\hat{x}_k$) state to our corrected ($x_k$) state estimate:
+The Kalman gain weighs the uncertainty of the prediction, $\hat{P}_k$, against the observation noise, $R$. The matrix $H$ maps the state space into the observation space so that the two covariances can be compared. The Kalman gain is then used to move from the predicted state $\hat{x}_k$ to the corrected state estimate $x_k$, and to update its uncertainty:
 $$
 x_k = \hat{x}_k + K_k \left( o_k - H \hat{x}_k \right)
 $$ {#eq-kf-update-state}
@@ -152,42 +188,13 @@ $$
 P_k = \left(I - K_k H\right) \hat{P}_k
 $$ {#eq-kf-update-cov}
 
- The term. $o_k - H \hat{x}_k$ is the innovation (the residual). This is the discrepancy between the actual observation and the predicted observation. When this difference is large our predicted state and our observation are not in agreement. If this difference is small then our predicted state and our observation are in agreement. A $K_k$ close to 1 indicates that we trust our observation more as our prediction is uncertain thus upweight the innovation's importance, while a $K_k$ close to 0 indicates that we trust our prediction more as our observation is noisy and downweight our innovation's importance. After this we then update our uncertainty $P_k$ purely based on the observation matrix and the kalman gain to reflect the new information gained from the observation.
+The term $o_k - H \hat{x}_k$ is the innovation, or residual. It is the discrepancy between the actual observation and the predicted observation. A large innovation indicates that the predicted state and the observation disagree, while a small innovation indicates that they agree. In the scalar case, a $K_k$ close to 1 means that the observation is trusted more because the prediction is uncertain, so the innovation is given more weight. A $K_k$ close to 0 means that the prediction is trusted more because the observation is noisy, so the innovation is given less weight. Finally, the uncertainty $P_k$ is updated from the predicted covariance $\hat{P}_k$, the observation matrix and the Kalman gain. This reflects the new information gained from the observation.
 
-The extension to the kalman filter to handle non linear systems is through the koopman operator and koopman theory. We also make use of KalmanNet, a neural network-based extension of the Kalman filter that learns the desired matrices $A$, $B$, $H$, $Q$, and $R$ from data, allowing it to adapt to complex and nonlinear dynamics [@kalmannet2021]. This is particularly useful in our context, where the underlying system may not adhere to the strict linear assumptions of the traditional Kalman filter.
-
-## Transformer (Encoder Based Vanilla)
-
-A transformer is a deep learning architecture that has revolutionized the field of natural language processing [@vaswani2017attention] and has also been applied to time-series forecasting [@nie2023patchtst]. It is based on the self-attention mechanism, which allows the model to weigh the importance of different parts of the input sequence when making predictions. This is particularly useful for time-series data, where the relationships between different time steps can be complex and non-linear. 
-
-Given a sequence of n input token embeddings $X \in \mathbb{R}^{n \times d}$, the transformer computes three matrices through linear transformations: the query $Q$, the key $K$, and the value $V$ [@vaswani2017attention]:
-$$
-Q = XW^Q, \quad K = XW^K, \quad V = XW^V
-$$ {#eq-transformer-qkv}
-
-$X$ is the input sequence of token embeddings, and $W^Q$, $W^K$, and $W^V$ are learnable weight matrices. Each token calculates a weighted average of the values $V$ based on the similarity between its query $Q$ and the keys $K$ of all other tokens. This is done using the scaled dot-product attention mechanism and allows the model to relate tokens to each other regardless of their position in the sequence. The attention scores for each token are computed as follows:
-$$
-\text{Attention}(Q, K, V) = \text{softmax}\left(\frac{QK^\top}{\sqrt{d_k}}\right)V
-$$ {#eq-transformer-attention}
-
-Transformers make use of multi-head attention, which allows the model to jointly evaluate information from different representation subspaces. Each head computes its own attention scores and outputs, which are then concatenated and linearly transformed to produce the final output. This enables the model to capture various aspects of the input sequence simultaneously. This is done via the following equation [@vaswani2017attention]:
-$$
-\text{MultiHead}(Q, K, V) = \text{Concat}(\text{head}_1, \ldots, \text{head}_h)W^O
-$$ {#eq-transformer-multihead}
-$W^O$ is a learnable weight matrix that projects the concatenated outputs of all heads back into the original embedding space. 
-
-We then use a position wise feedforward neural network to further process the output of the multi-head attention mechanism. This feedforward network consists of two linear transformations with a ReLU activation in between, applied independently to each position in the sequence [@vaswani2017attention]:
-
-$$
-\mathrm{FFN}(x) = \underbrace{\max(0,\, xW_1 + b_1)}_{\text{ReLU}}\,W_2 + b_2
-$$ {#eq-transformer-ffn}
-$W_1$ and $W_2$ are learnable weight matrices, and $b_1$ and $b_2$ are learnable bias vectors. The feedforward network allows the model to capture complex relationships and interactions within a single token embedding (whereas attention captures dependencies between token embeddings).
-
-Both the multihead attention and the feedforward network are wrapped in residual connections and layer normalization, which help stabilize training and improve convergence.
-
-Since attention treats the sequence as an unordered set, order information is injected separately, typically via a fixed positional encoding added to the input embeddings before the first layer [@vaswani2017attention]. Stacking $N$ such layers, with no causal masking and no decoder cross-attention, gives the encoder-only variant used here: a bidirectional token mixer mapping $\mathbb{R}^{n\times d} \to \mathbb{R}^{n\times d}$ that captures both local and global dependencies across the input sequence of token embeddings. K$^2$VAE makes use of a transformer encoder to process the left of nonlinearity that koopman does not capture. We call this the Integrator.
+The standard Kalman filter assumes a linear state-space model. Several extensions have been proposed to handle nonlinear dynamics, such as the extended and unscented Kalman filters [@kalmannet2021]. KalmanNet is a more recent example, in which a recurrent neural network learns the Kalman gain directly from data [@kalmannet2021]. In this work, nonlinearity is instead handled through Koopman theory. The KoopmanNet maps the system into a latent space in which its dynamics are approximately linear, and a Kalman filter then refines the estimate in that space [@k2vae2025]. The K$^2$VAE paper also calls this filter a KalmanNet, but it differs from the model of @kalmannet2021. Rather than learning the Kalman gain, it treats all of the matrices $A$, $B$, $H$, $Q$ and $R$ as learnable parameters [@k2vae2025]. This allows the filter to adapt to the latent dynamics learned from the data.
 
 ## Variational Autoencoders
+
+-- is this flow now too lit review like? in the lit review it briefly states the issues with AEs to then go to VAEs then to VAEs to TS forecasting, in this prelim we properly explore this process -- 
 
 Before introducing the Variational Autoencoder (VAE), it is necessary to describe the standard autoencoder (AE). AEs are neural networks that attempt to reconstruct their input $x$, rather than predict a target $\hat{y}$ from it.
 
