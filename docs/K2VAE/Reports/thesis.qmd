@@ -462,6 +462,8 @@ This chapter presents the datasets, the hyperparameter tuning, the benchmark mod
 
 Our datasets are summarised in @tbl-datasets. Each dataset is stored as a CSV file. The first column holds the date and time. Each remaining column holds a single variable. When reading in a dataset, we drop the first column and feed the remaining variables into our model in their original order. We use two types of dataset, denoted -L for long-term and -S for short-term forecasting. ETTh1 and Wind are the long-term datasets, while Exchange and Congestion are the short-term datasets. We store dataset-specific information in YAML files. This includes hyperparameters, model configurations and dataset locations. The model reads the YAML file for each dataset and retrieves the relevant information.
 
+-- Flag add line betwene datasets not for here---
+
 | Horizon | Dataset | #var. | Range | Freq. | Timesteps | Description |
 |:--------|:--------|------:|:------|:------|----------:|:------------|
 | Long-term | ETTh1-L | 7 | $\mathbb{R}$ | Hourly | 17,420 | Electricity transformer temperature per hour |
@@ -491,6 +493,8 @@ $$
 EI(\theta) = \mathbb{E}\left[\max(f(\theta^*) - f(\theta), 0)\right]
 $$
 
+-- FLAG make the numbers a table for the serach space -- 
+
 where $\theta^*$ is the configuration that has produced the lowest validation loss so far. By choosing the hyperparameters that maximise this expected improvement, the algorithm systematically zeros in on the optimal configuration with far fewer training runs. The search spaces were configured across specific intervals, testing learning rates of $1.0 \times 10^{-4}$, $5.0 \times 10^{-4}$, and $1.0 \times 10^{-3}$ for short-term benchmarks, and $5.0 \times 10^{-4}$, $1.0 \times 10^{-3}$, and $2.0 \times 10^{-3}$ for long-term benchmarks. The KL divergence weights were evaluated across $1.0 \times 10^{-4}$, $5.0 \times 10^{-4}$, and $1.0 \times 10^{-3}$ for short-term datasets, and $0.005$, $0.01$, and $0.02$ for long-term datasets. Both tiers utilised reconstruction loss weights of $0.5$, $1.0$, and $2.0$. This gives 27 possible combinations in each tier. The first phase trained 6 of these on ETTh1-L and 12 on Exchange-S.
 
 Conditioned on the optimal continuous parameters extracted from the first phase, the second phase executed an exhaustive grid search over structural parameters. These parameters control model capacity and include the latent dynamic dimension, the measurement multilayer perceptron hidden dimension, and the network depth. Because discrete structural combinations exhibit clear transitions in parameter count, grid evaluation provides a deterministic map of capacity constraints versus performance. For short-term datasets, the grid tested latent dimensions of 32, 64, and 128, hidden dimensions of 64, 128, and 256, and depths of 1, 2, and 3 layers. Long-term datasets were evaluated across latent dimensions of 64, 128, and 256, hidden dimensions of 128, 256, and 512, and depths of 2, 3, and 4 layers. This approach resulted in 27 exhaustive runs per tier. Across both phases, 33 configurations were trained on ETTh1-L and 39 on Exchange-S, giving 72 tuning runs in total.
@@ -498,6 +502,8 @@ Conditioned on the optimal continuous parameters extracted from the first phase,
 Instead of running sweeping pipelines across every individual dataset, we ran full two-phase sweeps exclusively on the representative anchor benchmarks, Exchange-S and ETTh1-L. The resulting optimal hyperparameter configurations were then transferred directly to other datasets within the same tier. This proxy tuning strategy is justified by how the model processes data internally. Under Reversible Instance Normalisation and local patchification, input tokens are standardised into normalised feature dimensions before they are projected into the Koopman space. Because the inputs are normalised and chunked similarly, the network capacity required to approximate the transition matrix and the Integrator's attention mechanism relies primarily on the sequence length and channel rank. Datasets in the same tier share these dimensions, meaning a model capacity tuned on one dataset transfers well to another dataset in the same tier. Furthermore, because Reversible Instance Normalisation scales every series to zero mean and unit variance, the relative magnitudes of the reconstruction error and the KL divergence penalty do not depend on the raw physical units of the time series. Instead, the balance between these loss terms depends primarily on the latent dimension $d$. As a result, the loss weights tuned on an anchor dataset remain properly balanced when applied to another dataset in the same tier.
 
 We made one exception for the long-term tier. The best ETTh1-L configuration used a latent dimension of 256. The second-best configuration used a latent dimension of 128 and reached a validation loss of `1.013`, against `1.009` for the best. The larger model took 2 hours and 38 minutes to train, against 47 minutes for the second-best configuration. Given this marginal gap of roughly 0.4%, we adopted the second-best configuration for ETTh1-L and Wind-L to reduce training cost.
+
+-- FLAG: worth thinking about might be viva Q, how do we know 0.004 is a big enough gap. --
 
 ## External Model Benchmarks {#sec-benchmarks}
 
@@ -892,15 +898,21 @@ Based on the ablation study, we recommend several strict configurations for depl
 
 ## Limitations {#sec-limitations}
 
+-- idea: all large use wandb results from 1 dataset, unique hp tuning better --
+
 The primary limitation of our ablation study is its restricted experimental scope. By relying on a single dataset (ETTh1-L) and one random initialisation, the model's statistical variance and generalisability across different time-series domains remain unquantified. Furthermore, because the early stopping policy minimised the total variational loss, the final selected epochs prioritise overall probabilistic balance rather than isolating the absolute lowest point-forecasting error.
 
 ## Future Work {#sec-future-work}
+
+-- Maybe reference as Bayesian instead of black litterman --
 
 A potential avenue for future research lies in redesigning the variational prior. Currently, K$^2$VAE forces the latent space to conform to an uninformed standard normal prior ($\mathcal{N}(0, I)$). Future iterations could address the model's excessively wide uncertainty bands by adopting a Bayesian updating approach analogous to the Black-Litterman (BL) asset allocation model [@black1992global].
 
 Originating in quantitative finance, the BL model uses a Bayesian methodology that effectively updates currently held opinions with data to form new opinions. This framework allows judgemental managers to give their views; these views are added to the quantitative model, and the final forecasts reflect a blend of both viewpoints. Within the BL model, an individual's beliefs are mathematically represented as a set of linear relationships, which are parameterised by known hyperparameters [@satchell2000demystification].
 
 Applying this underlying philosophy to K$^2$VAE would generalise this technique beyond finance to any specialised forecasting domain. It would involve replacing the generic normal prior with a structured, expert-informed prior. By formulating domain-specific rules, physical system limits, or expert forecasts as linear relationships parameterised into the prior distribution, the model would be forced to integrate the KalmanNet's data-driven posterior with human expertise. This could theoretically restrict the overly wide prediction intervals, prevent the forecast from defaulting to a flat mean during noisy periods, and provide a mathematically robust bridge between pure machine learning and traditional judgemental forecasting.
+
+Another potential research direction is to explore further why our implementation of K$^2$VAE underperforms the reference paper. We have outlined many deviations in @sec-paper-vs-reference to act as a starting point in a further analysis. The discrepancies in data splitting, model selection, and CRPS calculation methods suggest that the original results may be sensitive to these factors. A systematic investigation into these differences could yield insights into the conditions under which K$^2$VAE excels or falters. 
 
 # References {#sec-references .unnumbered}
 
