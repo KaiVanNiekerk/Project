@@ -420,7 +420,7 @@ The refined mean $Z'$ and covariance $P$ then define the latent distribution of 
 
 In the standard VAE outlined in @sec-vae, an input is encoded into a latent space by an encoder. This structured latent space is then sampled from, and these samples are passed through the decoder in an attempt to reconstruct the original input. In K$^2$VAE, the context window $X$ is first normalised using RevIN. It is then passed through the encoder, made up of KoopmanNet, the Integrator and KalmanNet, to produce the latent distribution $\mathbb{Q}$.
 
-![The K$^2$VAE architecture pipeline. Reproduced from @k2vae2025.](../thesis-figures/K2VAE_arch.png){#fig-k2vae-pipeline}
+![The K$^2$VAE architecture pipeline. Reproduced from @k2vae2025.](../thesis-figures/K2VAE_arch.pdf){#fig-k2vae-pipeline width=100%}
 
 The full architecture, reproduced from @k2vae2025, is shown in @fig-k2vae-pipeline. The input time series $X$ is patched and embedded into $X^{P'}$. KoopmanNet's measurement function $\psi$ then maps it into the latent observable space $X^{P*}$. The Koopman operator $\mathcal{K}$ combines a local component $\mathcal{K}_{loc}$, derived using eDMD, with a learnable global component $\mathcal{K}_{glo}$. It is applied iteratively to reconstruct the context as $\hat{X}_C$ and to roll the forecast forward as $\hat{X}_H$. The reconstruction residual $X^{Res} = X^{P*} - \hat{X}_C$ isolates the nonlinear dynamics that the linear operator could not capture. It is passed to the Integrator, which produces a control sequence $U$.
 
