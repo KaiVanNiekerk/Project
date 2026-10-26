@@ -959,6 +959,16 @@ Another direction is to explain why our results differ so much from those of the
 ::: {#refs}
 :::
 
+# AI Disclosure {#sec-ai-disclosure .unnumbered}
+
+```{=latex}
+\markboth{AI Disclosure}{AI Disclosure}
+```
+
+We designed and coded the main K$^2$VAE pipeline ourselves, including the data processing, the core model components, training and evaluation. All modelling and design decisions were our own. We used Claude (Anthropic) as a coding assistant for certain components of the model and to check our implementation, and more extensively for non-essential code such as plotting and dashboard scripts. Gemini (Google) was used to generate some initial unit tests. We ran, tested and verified all code ourselves, and all experiments, results and figures come from our own runs.
+
+The thesis and its arguments are our own. Claude was used to help verify the accuracy of our citations, by checking cited claims against their sources and confirming reference details. It was also used to compare the authors' public K$^2$VAE repository with our implementation and the paper, which helped us identify the differences discussed in @sec-paper-vs-reference. Claude was also used for language editing and for formatting in Quarto and LaTeX. We reviewed and verified every suggested change before adopting it, and we take full responsibility for the content of this thesis.
+
 ```{=latex}
 \appendix
 ```
